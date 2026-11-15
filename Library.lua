@@ -4759,6 +4759,15 @@ local Library do
 
             if Data.Default then
                 Keybind:Set({Key = Data.Default, Mode = Data.Mode or "Toggle"})
+            else
+                -- unbound by default: still honor the chosen mode so the first
+                -- key the user picks works right away
+                Items["KeyButton"].Instance.Text = "None"
+
+                if Data.Mode then
+                    Keybind.Mode = Data.Mode
+                    Keybind:SetMode(Data.Mode)
+                end
             end
 
             Library.SetFlags[Keybind.Flag] = function(Value)
