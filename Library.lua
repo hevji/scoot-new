@@ -1337,15 +1337,6 @@ local Library do
             end
 
             local Debounce = false
-            local FadeInstances = nil
-
-            Items["Page"].Instance.DescendantAdded:Connect(function()
-                FadeInstances = nil
-            end)
-
-            Items["Page"].Instance.DescendantRemoving:Connect(function()
-                FadeInstances = nil
-            end)
 
             function Page:Turn(Bool)
                 if Debounce then 
@@ -1374,20 +1365,7 @@ local Library do
                     Items["Text"]:Tween(nil, {Position = UDim2New(0, 8, 0.5, 0)})
                 end
 
-                if not FadeInstances then
-                    FadeInstances = Items["Page"].Instance:GetDescendants()
-                    TableInsert(FadeInstances, Items["Page"].Instance)
-                end
-
-                local NewTween = Tween:FadePairs(FadeInstances, Bool, Data.Window.FadeTime)
-
-                if NewTween then
-                    NewTween.Tween.Completed:Once(function()
-                        Debounce = false
-                    end)
-                else
-                    Debounce = false
-                end
+                Debounce = false
             end
 
             Items["Inactive"]:Connect("MouseButton1Down", function()
@@ -1570,15 +1548,6 @@ local Library do
             end
 
             local Debounce = false
-            local FadeInstances = nil
-
-            Items["Page"].Instance.DescendantAdded:Connect(function()
-                FadeInstances = nil
-            end)
-
-            Items["Page"].Instance.DescendantRemoving:Connect(function()
-                FadeInstances = nil
-            end)
 
             Library.SearchItems[SubPage] = { }
 
@@ -1608,20 +1577,7 @@ local Library do
                     Items["Text"]:Tween(nil, {Position = UDim2New(0.5, -5, 0.5, 0)})
                 end
 
-                if not FadeInstances then
-                    FadeInstances = Items["Page"].Instance:GetDescendants()
-                    TableInsert(FadeInstances, Items["Page"].Instance)
-                end
-
-                local NewTween = Tween:FadePairs(FadeInstances, Bool, Data.Window.FadeTime)
-
-                if NewTween then
-                    NewTween.Tween.Completed:Once(function()
-                        Debounce = false
-                    end)
-                else
-                    Debounce = false
-                end
+                Debounce = false
             end
 
             Items["Inactive"]:Connect("MouseButton1Down", function()
@@ -2502,6 +2458,204 @@ local Library do
             end)
 
             return Viewport, Items
+        end
+
+        Components.IconGrid = function(self, Data)
+            local IconGrid = {
+                Flag = Data.Flag,
+                Selected = nil,
+                Tiles = { }
+            }
+
+            local Items = { } do
+                Items["Grid"] = Instances:Create("Frame", {
+                    Parent = Data.Parent.Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Size = UDim2New(1, 0, 0, Data.Height or 150),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Grid"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(235, 235, 235),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = Data.Name,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    Position = UDim2New(0, 0, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BorderSizePixel = 0,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    TextSize = 9,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["Title"]:TextBorder()
+
+                Items["Scroll"] = Instances:Create("ScrollingFrame", {
+                    Parent = Items["Grid"].Instance,
+                    Name = "\0",
+                    Position = UDim2New(0, 0, 0, 18),
+                    Size = UDim2New(1, 0, 1, -18),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    ScrollBarThickness = 3,
+                    Active = true
+                })  Items["Scroll"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+                Instances:Create("UIGridLayout", {
+                    Parent = Items["Scroll"].Instance,
+                    Name = "\0",
+                    CellSize = UDim2New(0, Data.CellSize or 62, 0, Data.CellSize or 62),
+                    CellPadding = UDim2New(0, 5, 0, 5),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+            end
+
+            local function ApplySelection(Name)
+                for TileName, Record in IconGrid.Tiles do
+                    if TileName == Name then
+                        Record.Stroke.Instance.Color = Library.Theme["Accent"]
+                    else
+                        Record.Stroke.Instance.Color = Library.Theme["Outline"]
+                    end
+                end
+            end
+
+            function IconGrid:SetItems(List)
+                for _, Record in IconGrid.Tiles do
+                    Record.Button.Instance:Destroy()
+                end
+
+                IconGrid.Tiles = { }
+
+                for Index, Item in List do
+                    local Tile = Instances:Create("TextButton", {
+                        Parent = Items["Scroll"].Instance,
+                        Name = "\0",
+                        Text = "",
+                        AutoButtonColor = false,
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        BorderSizePixel = 0
+                    })  Tile:AddToTheme({BackgroundColor3 = "Element"})
+
+                    Instances:Create("UICorner", {
+                        Parent = Tile.Instance,
+                        Name = "\0",
+                        CornerRadius = UDimNew(0, 6)
+                    })
+
+                    local Stroke = Instances:Create("UIStroke", {
+                        Parent = Tile.Instance,
+                        Name = "\0",
+                        Color = FromRGB(42, 49, 45),
+                        LineJoinMode = Enum.LineJoinMode.Miter,
+                        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    })
+
+                    Stroke:AddToTheme({Color = "Outline"})
+
+                    if type(Item.Image) == "string" and Item.Image ~= "" then
+                        Instances:Create("ImageLabel", {
+                            Parent = Tile.Instance,
+                            Name = "\0",
+                            Image = Item.Image,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel = 0,
+                            Position = UDim2New(0, 4, 0, 4),
+                            Size = UDim2New(1, -8, 1, -20)
+                        })
+                    end
+
+                    Instances:Create("TextLabel", {
+                        Parent = Tile.Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(235, 235, 235),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        Text = Item.Name,
+                        TextSize = 9,
+                        Size = UDim2New(1, -4, 0, 12),
+                        Position = UDim2New(0, 2, 1, -13),
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Center,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
+                        BorderSizePixel = 0
+                    }):AddToTheme({TextColor3 = "Text"})
+
+                    IconGrid.Tiles[Item.Name] = { Button = Tile, Stroke = Stroke }
+
+                    Tile:Connect("MouseButton1Down", function()
+                        IconGrid:Set(Item.Name)
+                    end)
+                end
+
+                ApplySelection(IconGrid.Selected)
+            end
+
+            function IconGrid:Set(Name)
+                if IconGrid.Tiles[Name] == nil then
+                    return
+                end
+
+                IconGrid.Selected = Name
+
+                if IconGrid.Flag then
+                    Library.Flags[IconGrid.Flag] = Name
+                end
+
+                ApplySelection(Name)
+
+                if Data.Callback then
+                    Library:SafeCall(Data.Callback, Name)
+                end
+            end
+
+            function IconGrid:Clear()
+                IconGrid.Selected = nil
+
+                if IconGrid.Flag then
+                    Library.Flags[IconGrid.Flag] = nil
+                end
+
+                ApplySelection(nil)
+
+                if Data.Callback then
+                    Library:SafeCall(Data.Callback, nil)
+                end
+            end
+
+            function IconGrid:SetVisibility(Bool)
+                Items["Grid"].Instance.Visible = Bool
+            end
+
+            if Data.Items then
+                IconGrid:SetItems(Data.Items)
+            end
+
+            if Data.Default and IconGrid.Tiles[Data.Default] then
+                IconGrid:Set(Data.Default)
+            end
+
+            if IconGrid.Flag then
+                Library.SetFlags[IconGrid.Flag] = function(Value)
+                    if Value ~= nil then
+                        IconGrid:Set(Value)
+                    else
+                        IconGrid:Clear()
+                    end
+                end
+            end
+
+            return IconGrid, Items
         end
 
         Components.Dropdown = function(self, Data)
@@ -6388,6 +6542,38 @@ local Library do
         end
 
         return NewDropdown 
+    end
+
+    Library.Sections.IconGrid = function(self, Data)
+        Data = Data or { }
+
+        local IconGrid = {
+            Window = self.Window,
+            Page = self.Page,
+            Section = self,
+
+            Name = Data.Name or Data.name or "IconGrid",
+            Flag = Data.Flag or Data.flag or Library:NextFlag(),
+            Height = Data.Height or Data.height or 150,
+            CellSize = Data.CellSize or Data.cellsize or 62,
+            Items = Data.Items or Data.items or nil,
+            Default = Data.Default or Data.default or nil,
+            Callback = Data.Callback or Data.callback or function() end,
+        }
+
+        local NewIconGrid, IconGridItems = Components:IconGrid({
+            Name = IconGrid.Name,
+            Parent = IconGrid.Section.Items["Content"],
+            Page = IconGrid.Page,
+            Flag = IconGrid.Flag,
+            Height = IconGrid.Height,
+            CellSize = IconGrid.CellSize,
+            Items = IconGrid.Items,
+            Default = IconGrid.Default,
+            Callback = IconGrid.Callback,
+        })
+
+        return NewIconGrid
     end
 
     Library.Sections.Viewport = function(self, Data)
