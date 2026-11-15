@@ -350,19 +350,37 @@ local Library do
             return { Tween = TweenObject }
         end
 
+        -- walks up to the owning ScreenGui; UIStroke has no Visible property,
+        -- so only GuiObjects are checked on the way up
+        local function IsEffectivelyVisible(Item)
+            local Current = Item
+
+            while Current ~= nil and not Current:IsA("ScreenGui") do
+                if Current:IsA("GuiObject") and not Current.Visible then
+                    return false
+                end
+
+                Current = Current.Parent
+            end
+
+            return true
+        end
+
         Tween.FadePairs = function(self, Instances, Bool, Speed)
             local Last
 
             for Index, Value in Instances do
-                local TransparencyProperty = Tween:GetProperty(Value)
+                if IsEffectivelyVisible(Value) then
+                    local TransparencyProperty = Tween:GetProperty(Value)
 
-                if TransparencyProperty then
-                    if type(TransparencyProperty) == "table" then
-                        for _, Property in TransparencyProperty do
-                            Last = Tween:FadeItem(Value, Property, Bool, Speed) or Last
+                    if TransparencyProperty then
+                        if type(TransparencyProperty) == "table" then
+                            for _, Property in TransparencyProperty do
+                                Last = Tween:FadeItem(Value, Property, Bool, Speed) or Last
+                            end
+                        else
+                            Last = Tween:FadeItem(Value, TransparencyProperty, Bool, Speed) or Last
                         end
-                    else
-                        Last = Tween:FadeItem(Value, TransparencyProperty, Bool, Speed) or Last
                     end
                 end
             end
@@ -1347,7 +1365,6 @@ local Library do
                 
                 Debounce = true
                 Items["Page"].Instance.Visible = Bool 
-                Items["Page"].Instance.Parent = Bool and Data.ContentHolder.Instance or Library.UnusedHolder.Instance
 
                 if Page.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0})
@@ -1559,7 +1576,6 @@ local Library do
                 SubPage.Active = Bool 
                 Debounce = true
                 Items["Page"].Instance.Visible = Bool 
-                Items["Page"].Instance.Parent = Bool and Data.Page.Items["Columns"].Instance or Library.UnusedHolder.Instance
 
                 if SubPage.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0})
@@ -5748,6 +5764,16 @@ local Library do
             end
         end
 
+        local WindowFadeInstances = nil
+
+        Items["Window"].Instance.DescendantAdded:Connect(function()
+            WindowFadeInstances = nil
+        end)
+
+        Items["Window"].Instance.DescendantRemoving:Connect(function()
+            WindowFadeInstances = nil
+        end)
+
         function Window:SetOpen(Bool)
             if Debounce then 
                 return
@@ -5761,10 +5787,12 @@ local Library do
                 Items["Window"].Instance.Visible = true 
             end
 
-            local Descendants = Items["Window"].Instance:GetDescendants()
-            TableInsert(Descendants, Items["Window"].Instance)
+            if not WindowFadeInstances then
+                WindowFadeInstances = Items["Window"].Instance:GetDescendants()
+                TableInsert(WindowFadeInstances, Items["Window"].Instance)
+            end
 
-            local NewTween = Tween:FadePairs(Descendants, Bool, Library.FadeSpeed)
+            local NewTween = Tween:FadePairs(WindowFadeInstances, Bool, Library.FadeSpeed)
 
             local function OnFadeCompleted()
                 Debounce = false 
