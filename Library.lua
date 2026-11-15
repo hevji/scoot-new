@@ -280,23 +280,43 @@ local Library do
             return NewTween
         end
 
+        local PropertyCache = setmetatable({ }, { __mode = "k" })
+
         Tween.GetProperty = function(self, Item)
             Item = Item or self.Item 
 
-            if Item:IsA("Frame") then
-                return { "BackgroundTransparency" }
-            elseif Item:IsA("TextLabel") or Item:IsA("TextButton") then
-                return { "TextTransparency", "BackgroundTransparency" }
-            elseif Item:IsA("ImageLabel") or Item:IsA("ImageButton") then
-                return { "BackgroundTransparency", "ImageTransparency" }
-            elseif Item:IsA("ScrollingFrame") then
-                return { "BackgroundTransparency", "ScrollBarImageTransparency" }
-            elseif Item:IsA("TextBox") then
-                return { "TextTransparency", "BackgroundTransparency" }
-            elseif Item:IsA("UIStroke") then 
-                return { "Transparency" }
+            local Cached = PropertyCache[Item]
+
+            if Cached == false then
+                return nil
             end
+
+            if Cached then
+                return Cached
+            end
+
+            local Properties
+
+            if Item:IsA("Frame") then
+                Properties = { "BackgroundTransparency" }
+            elseif Item:IsA("TextLabel") or Item:IsA("TextButton") then
+                Properties = { "TextTransparency", "BackgroundTransparency" }
+            elseif Item:IsA("ImageLabel") or Item:IsA("ImageButton") then
+                Properties = { "BackgroundTransparency", "ImageTransparency" }
+            elseif Item:IsA("ScrollingFrame") then
+                Properties = { "BackgroundTransparency", "ScrollBarImageTransparency" }
+            elseif Item:IsA("TextBox") then
+                Properties = { "TextTransparency", "BackgroundTransparency" }
+            elseif Item:IsA("UIStroke") then 
+                Properties = { "Transparency" }
+            end
+
+            PropertyCache[Item] = Properties or false
+
+            return Properties
         end
+
+        local InfoCache = { }
 
         Tween.FadeItem = function(self, Item, Property, Visibility, Speed)
             local Item = Item or self.Item 
@@ -304,18 +324,50 @@ local Library do
             local OldTransparency = Item[Property]
             Item[Property] = Visibility and 1 or OldTransparency
 
-            local NewTween = Tween:Create(Item, TweenInfo.new(Speed or Library.Tween.Time, Library.Tween.Style, Library.Tween.Direction), {
-                [Property] = Visibility and OldTransparency or 1
-            }, true)
+            local Goal = Visibility and OldTransparency or 1
 
-            Library:Connect(NewTween.Tween.Completed, function()
-                if not Visibility then 
+            if Item[Property] == Goal then
+                return nil
+            end
+
+            local Info = InfoCache[Speed]
+
+            if not Info then
+                Info = TweenInfo.new(Speed or Library.Tween.Time, Library.Tween.Style, Library.Tween.Direction)
+                InfoCache[Speed] = Info
+            end
+
+            local TweenObject = TweenService:Create(Item, Info, { [Property] = Goal })
+            TweenObject:Play()
+
+            if not Visibility then
+                TweenObject.Completed:Once(function()
                     task.wait()
                     Item[Property] = OldTransparency
-                end
-            end)
+                end)
+            end
 
-            return NewTween
+            return { Tween = TweenObject }
+        end
+
+        Tween.FadePairs = function(self, Instances, Bool, Speed)
+            local Last
+
+            for Index, Value in Instances do
+                local TransparencyProperty = Tween:GetProperty(Value)
+
+                if TransparencyProperty then
+                    if type(TransparencyProperty) == "table" then
+                        for _, Property in TransparencyProperty do
+                            Last = Tween:FadeItem(Value, Property, Bool, Speed) or Last
+                        end
+                    else
+                        Last = Tween:FadeItem(Value, TransparencyProperty, Bool, Speed) or Last
+                    end
+                end
+            end
+
+            return Last
         end
 
         Tween.Get = function(self)
@@ -382,23 +434,7 @@ local Library do
             local Descendants = Item:GetDescendants()
             TableInsert(Descendants, Item)
 
-            local NewTween
-
-            for Index, Value in Descendants do 
-                local TransparencyProperty = Tween:GetProperty(Value)
-
-                if not TransparencyProperty then 
-                    continue
-                end
-
-                if type(TransparencyProperty) == "table" then 
-                    for _, Property in TransparencyProperty do 
-                        NewTween = Tween:FadeItem(Value, Property, not Visibility, Speed)
-                    end
-                else
-                    NewTween = Tween:FadeItem(Value, TransparencyProperty, not Visibility, Speed)
-                end
-            end
+            return Tween:FadePairs(Descendants, not Visibility, Speed)
         end
 
         Instances.AddToTheme = function(self, Properties)
@@ -1301,6 +1337,15 @@ local Library do
             end
 
             local Debounce = false
+            local FadeInstances = nil
+
+            Items["Page"].Instance.DescendantAdded:Connect(function()
+                FadeInstances = nil
+            end)
+
+            Items["Page"].Instance.DescendantRemoving:Connect(function()
+                FadeInstances = nil
+            end)
 
             function Page:Turn(Bool)
                 if Debounce then 
@@ -1329,30 +1374,20 @@ local Library do
                     Items["Text"]:Tween(nil, {Position = UDim2New(0, 8, 0.5, 0)})
                 end
 
-                local AllInstances = Items["Page"].Instance:GetDescendants()
-                TableInsert(AllInstances, Items["Page"].Instance)
-                
-                local NewTween 
-
-                for Index, Value in AllInstances do 
-                    local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then 
-                        continue
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Data.Window.FadeTime)
-                        end
-                    else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Data.Window.FadeTime)
-                    end
+                if not FadeInstances then
+                    FadeInstances = Items["Page"].Instance:GetDescendants()
+                    TableInsert(FadeInstances, Items["Page"].Instance)
                 end
 
-                Library:Connect(NewTween.Tween.Completed, function()
+                local NewTween = Tween:FadePairs(FadeInstances, Bool, Data.Window.FadeTime)
+
+                if NewTween then
+                    NewTween.Tween.Completed:Once(function()
+                        Debounce = false
+                    end)
+                else
                     Debounce = false
-                end)
+                end
             end
 
             Items["Inactive"]:Connect("MouseButton1Down", function()
@@ -1535,6 +1570,15 @@ local Library do
             end
 
             local Debounce = false
+            local FadeInstances = nil
+
+            Items["Page"].Instance.DescendantAdded:Connect(function()
+                FadeInstances = nil
+            end)
+
+            Items["Page"].Instance.DescendantRemoving:Connect(function()
+                FadeInstances = nil
+            end)
 
             Library.SearchItems[SubPage] = { }
 
@@ -1564,30 +1608,20 @@ local Library do
                     Items["Text"]:Tween(nil, {Position = UDim2New(0.5, -5, 0.5, 0)})
                 end
 
-                local AllInstances = Items["Page"].Instance:GetDescendants()
-                TableInsert(AllInstances, Items["Page"].Instance)
-
-                local NewTween 
-
-                for Index, Value in AllInstances do 
-                    local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then 
-                        continue
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Data.Window.FadeTime)
-                        end
-                    else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Data.Window.FadeTime)
-                    end
+                if not FadeInstances then
+                    FadeInstances = Items["Page"].Instance:GetDescendants()
+                    TableInsert(FadeInstances, Items["Page"].Instance)
                 end
 
-                Library:Connect(NewTween.Tween.Completed, function()
+                local NewTween = Tween:FadePairs(FadeInstances, Bool, Data.Window.FadeTime)
+
+                if NewTween then
+                    NewTween.Tween.Completed:Once(function()
+                        Debounce = false
+                    end)
+                else
                     Debounce = false
-                end)
+                end
             end
 
             Items["Inactive"]:Connect("MouseButton1Down", function()
@@ -2421,30 +2455,20 @@ local Library do
                 local Descendants = Items["OptionHolder"].Instance:GetDescendants()
                 TableInsert(Descendants, Items["OptionHolder"].Instance)
 
-                local NewTween
+                local NewTween = Tween:FadePairs(Descendants, Bool, Library.FadeSpeed)
 
-                for Index, Value in Descendants do 
-                    local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then
-                        continue 
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
-                        end
-                    else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
-                    end
-                end
-                
-                NewTween.Tween.Completed:Connect(function()
+                local function OnFadeCompleted()
                     Debounce = false 
                     Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                     task.wait(0.2)
                     Items["OptionHolder"].Instance.Parent = not Dropdown.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
-                end)
+                end
+
+                if NewTween then
+                    NewTween.Tween.Completed:Once(OnFadeCompleted)
+                else
+                    task.spawn(OnFadeCompleted)
+                end
             end
 
             function Dropdown:SetVisibility(Bool)
@@ -3581,30 +3605,20 @@ local Library do
                 local Descendants = Items["ColorpickerWindow"].Instance:GetDescendants()
                 TableInsert(Descendants, Items["ColorpickerWindow"].Instance)
 
-                local NewTween
+                local NewTween = Tween:FadePairs(Descendants, Bool, Library.FadeSpeed)
 
-                for Index, Value in Descendants do 
-                    local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then
-                        continue 
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
-                        end
-                    else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
-                    end
-                end
-                
-                NewTween.Tween.Completed:Connect(function()
+                local function OnFadeCompleted()
                     Debounce = false 
                     Items["ColorpickerWindow"].Instance.Visible = Colorpicker.IsOpen
                     task.wait(0.2)
                     Items["ColorpickerWindow"].Instance.Parent = not Colorpicker.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
-                end)
+                end
+
+                if NewTween then
+                    NewTween.Tween.Completed:Once(OnFadeCompleted)
+                else
+                    task.spawn(OnFadeCompleted)
+                end
             end
 
             UpdateSync = function(Bool)
@@ -4098,30 +4112,20 @@ local Library do
                 local Descendants = Items["KeybindWindow"].Instance:GetDescendants()
                 TableInsert(Descendants, Items["KeybindWindow"].Instance)
 
-                local NewTween
+                local NewTween = Tween:FadePairs(Descendants, Bool, Library.FadeSpeed)
 
-                for Index, Value in Descendants do 
-                    local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then
-                        continue 
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
-                        end
-                    else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
-                    end
-                end
-                
-                NewTween.Tween.Completed:Connect(function()
+                local function OnFadeCompleted()
                     Debounce = false 
                     Items["KeybindWindow"].Instance.Visible = Keybind.IsOpen
                     task.wait(0.2)
                     Items["KeybindWindow"].Instance.Parent = not Keybind.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
-                end)
+                end
+
+                if NewTween then
+                    NewTween.Tween.Completed:Once(OnFadeCompleted)
+                else
+                    task.spawn(OnFadeCompleted)
+                end
             end
 
             function Keybind:SetMode(Mode)
@@ -5366,25 +5370,9 @@ local Library do
             local Descendants = Items["Window"].Instance:GetDescendants()
             TableInsert(Descendants, Items["Window"].Instance)
 
-            local NewTween
+            local NewTween = Tween:FadePairs(Descendants, Bool, Library.FadeSpeed)
 
-            for Index, Value in Descendants do 
-                local TransparencyProperty = Tween:GetProperty(Value)
-
-                if not TransparencyProperty then
-                    continue 
-                end
-
-                if type(TransparencyProperty) == "table" then 
-                    for _, Property in TransparencyProperty do 
-                        NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
-                    end
-                else
-                    NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
-                end
-            end
-            
-            NewTween.Tween.Completed:Connect(function()
+            local function OnFadeCompleted()
                 Debounce = false 
                 Items["Window"].Instance.Visible = Window.IsOpen
                 if Window.IsOpen then
@@ -5394,7 +5382,13 @@ local Library do
                     Items["MouseBackground"].Instance.Visible = false
                     UserInputService.MouseIconEnabled = true
                 end
-            end)
+            end
+
+            if NewTween then
+                NewTween.Tween.Completed:Once(OnFadeCompleted)
+            else
+                OnFadeCompleted()
+            end
         end
 
         Library:Connect(UserInputService.InputBegan, function(Input)
