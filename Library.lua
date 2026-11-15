@@ -2804,13 +2804,75 @@ local Library do
                     PaddingLeft = UDimNew(0, 8)
                 })
 
-                Instances:Create("UIListLayout", {
+                Items["Search"] = Instances:Create("TextBox", {
                     Parent = Items["OptionHolder"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(235, 235, 235),
+                    PlaceholderColor3 = FromRGB(185, 185, 185),
+                    PlaceholderText = "search...",
+                    Text = "",
+                    BackgroundColor3 = FromRGB(30, 36, 31),
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, 0, 0, 18),
+                    ZIndex = 5,
+                    ClearTextOnFocus = false,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextSize = 9
+                })  Items["Search"]:AddToTheme({BackgroundColor3 = "Element", TextColor3 = "Text", PlaceholderColor3 = "Placeholder Text"})
+
+                Items["Scroll"] = Instances:Create("ScrollingFrame", {
+                    Parent = Items["OptionHolder"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, 0, 0, 0),
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    ScrollBarThickness = 3,
+                    ZIndex = 5,
+                    Active = true
+                })  Items["Scroll"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Scroll"].Instance,
                     Name = "\0",
                     Padding = UDimNew(0, 3),
                     SortOrder = Enum.SortOrder.LayoutOrder
                 })
             end
+
+            -- option list: filters through the search box, window capped at
+            -- MaxListHeight so huge lists scroll instead of covering the screen
+            local MaxListHeight = 220
+
+            local function UpdateScrollHeight()
+                local Visible = 0
+
+                for _, Value in Dropdown.Options do
+                    if Value.Button.Instance.Visible then
+                        Visible = Visible + 1
+                    end
+                end
+
+                Items["Scroll"].Instance.Size = UDim2New(1, 0, 0, math.min(Visible * 18, MaxListHeight))
+            end
+
+            local function ApplyFilter(Text)
+                Text = StringLower(Text)
+
+                for _, Value in Dropdown.Options do
+                    Value.Button.Instance.Visible = Text == "" or StringLower(Value.Name):find(Text, 1, true) ~= nil
+                end
+
+                UpdateScrollHeight()
+            end
+
+            Items["Search"]:Connect("Changed", function(Property)
+                if Property == "Text" then
+                    ApplyFilter(Items["Search"].Instance.Text)
+                end
+            end)
 
             function Dropdown:Get()
                 return Dropdown.Value
@@ -2831,6 +2893,7 @@ local Library do
                 if Dropdown.IsOpen then 
                     Items["OptionHolder"].Instance.Visible = true
                     Items["OptionHolder"].Instance.Parent = Library.Holder.Instance
+                    Items["Search"].Instance.Text = ""
                     Items["Icon"]:Tween(nil, {Rotation = -90})
                     
                     RenderStepped = RunService.RenderStepped:Connect(function()
@@ -3023,6 +3086,7 @@ local Library do
                 end)
 
                 Dropdown.Options[OptionData.Name] = OptionData
+                UpdateScrollHeight()
                 return OptionData
             end
 
@@ -3033,6 +3097,7 @@ local Library do
 
                 Dropdown.Options[Option].Button:Clean()
                 Dropdown.Options[Option] = nil
+                UpdateScrollHeight()
             end
 
             function Dropdown:Refresh(List)
