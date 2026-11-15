@@ -2264,6 +2264,246 @@ local Library do
             return Label, Items 
         end
 
+        Components.Viewport = function(self, Data)
+            local Viewport = {
+                Model = nil,
+                ModelCenter = Vector3.new(0, 0, 0),
+                ModelRadius = 4,
+                Rotation = 0,
+                Elevation = 0.35,
+                DistanceMultiplier = Data.DistanceMul or 1,
+                AutoRotate = Data.AutoRotate ~= false,
+                RotateSpeed = Data.RotateSpeed or 0.6
+            }
+
+            local Camera = Instances:Create("Camera", {
+                FieldOfView = Data.FieldOfView or 50
+            })
+
+            local WorldModel = Instances:Create("WorldModel", { })
+
+            local Items = { } do
+                Items["Viewport"] = Instances:Create("Frame", {
+                    Parent = Data.Parent.Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Size = UDim2New(1, 0, 0, Data.Height or 180),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Viewport"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(235, 235, 235),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = Data.Name,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    Position = UDim2New(0, 0, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BorderSizePixel = 0,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    TextSize = 9,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["Title"]:TextBorder()
+
+                Items["Card"] = Instances:Create("Frame", {
+                    Parent = Items["Viewport"].Instance,
+                    Name = "\0",
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Position = UDim2New(0, 0, 0, 20),
+                    Size = UDim2New(1, 0, 1, -20),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Card"]:AddToTheme({BackgroundColor3 = "Element", BorderColor3 = "Border"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 6)
+                })
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(42, 49, 45),
+                    LineJoinMode = Enum.LineJoinMode.Miter,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
+                Items["Render"] = Instances:Create("ViewportFrame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    LightDirection = Vector3.new(-1, -0.5, -1).Unit,
+                    LightColor = FromRGB(255, 255, 255),
+                    Ambient = FromRGB(140, 140, 150),
+                    CurrentCamera = Camera.Instance
+                })
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Render"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 6)
+                })
+
+                WorldModel.Instance.Parent = Items["Render"].Instance
+
+                Items["Input"] = Instances:Create("TextButton", {
+                    Parent = Items["Render"].Instance,
+                    Name = "\0",
+                    Text = "",
+                    AutoButtonColor = false,
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 1, 0),
+                    BorderSizePixel = 0
+                })
+            end
+
+            local function UpdateCamera()
+                local Distance = math.max(Viewport.ModelRadius * 2.4 * Viewport.DistanceMultiplier, 4)
+                local Elevation = math.clamp(Viewport.Elevation, -1.4707963267948965, 1.4707963267948965)
+                local CosElevation = math.cos(Elevation)
+
+                Camera.Instance.CFrame = CFrame.new(
+                    Viewport.ModelCenter + Vector3.new(
+                        math.cos(Viewport.Rotation) * Distance * CosElevation,
+                        math.sin(Elevation) * Distance,
+                        math.sin(Viewport.Rotation) * Distance * CosElevation
+                    ),
+                    Viewport.ModelCenter
+                )
+            end
+
+            function Viewport:SetModel(Model)
+                if Viewport.Model ~= nil and Viewport.Model.Parent == WorldModel.Instance then
+                    Viewport.Model:Destroy()
+                end
+
+                Viewport.Model = nil
+
+                if Model ~= nil then
+                    local Clone = Model:Clone()
+
+                    if Clone ~= nil then
+                        for _, Descendant in ipairs(Clone:GetDescendants()) do
+                            if Descendant:IsA("LuaSourceContainer") then
+                                Descendant:Destroy()
+                            end
+                        end
+
+                        Clone.Parent = WorldModel.Instance
+                        Viewport.Model = Clone
+
+                        local Center = Vector3.new(0, 0, 0)
+                        local Radius = 4
+
+                        if Clone:IsA("Model") then
+                            local BoundingBox, Extents = Clone:GetBoundingBox()
+
+                            Center = BoundingBox.Position
+                            Radius = math.max(Extents.X, Extents.Y, Extents.Z) * 0.5
+                        elseif Clone:IsA("BasePart") then
+                            Center = Clone.Position
+                            Radius = math.max(Clone.Size.X, Clone.Size.Y, Clone.Size.Z) * 0.5
+                        end
+
+                        Viewport.ModelCenter = Center
+                        Viewport.ModelRadius = math.max(Radius, 0.001)
+
+                        UpdateCamera()
+                    end
+                end
+            end
+
+            function Viewport:SetRotation(Rotation)
+                Viewport.Rotation = Rotation
+
+                UpdateCamera()
+            end
+
+            function Viewport:SetDistance(Multiplier)
+                Viewport.DistanceMultiplier = math.max(0.1, Multiplier)
+
+                UpdateCamera()
+            end
+
+            function Viewport:SetAutoRotate(Bool)
+                Viewport.AutoRotate = Bool
+            end
+
+            function Viewport:SetVisibility(Bool)
+                Items["Viewport"].Instance.Visible = Bool
+            end
+
+            local Dragging = false
+            local LastPosition = nil
+
+            Items["Input"]:Connect("InputBegan", function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseWheel then
+                    local N = Input.Position.Z > 0 and -1 or 1
+
+                    Viewport.DistanceMultiplier = math.clamp(Viewport.DistanceMultiplier * 0.85 ^ -N, 0.2, 6)
+
+                    UpdateCamera()
+                elseif Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                    Dragging = true
+                    LastPosition = nil
+                    Viewport.AutoRotate = false
+                end
+            end)
+
+            Library:Connect(UserInputService.InputChanged, function(Input)
+                if not Dragging then
+                    return
+                end
+
+                if Input.UserInputType ~= Enum.UserInputType.MouseMovement and Input.UserInputType ~= Enum.UserInputType.Touch then
+                    return
+                end
+
+                local Current = Vector2New(Input.Position.X, Input.Position.Y)
+
+                if LastPosition ~= nil then
+                    local Delta = Current - LastPosition
+
+                    Viewport.Rotation = Viewport.Rotation - Delta.X * 0.012
+                    Viewport.Elevation = math.clamp(Viewport.Elevation - Delta.Y * 0.012, -1.4707963267948965, 1.4707963267948965)
+
+                    UpdateCamera()
+                end
+
+                LastPosition = Current
+            end)
+
+            Library:Connect(UserInputService.InputEnded, function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                    Dragging = false
+                    LastPosition = nil
+                end
+            end)
+
+            Library:Connect(RunService.RenderStepped, function(Delta)
+                if Viewport.Model == nil or not Viewport.AutoRotate or Dragging then
+                    return
+                end
+
+                Viewport.Rotation = Viewport.Rotation + Delta * Viewport.RotateSpeed
+
+                UpdateCamera()
+            end)
+
+            return Viewport, Items
+        end
+
         Components.Dropdown = function(self, Data)
             local Dropdown = {
                 Flag = Data.Flag, 
@@ -6148,6 +6388,36 @@ local Library do
         end
 
         return NewDropdown 
+    end
+
+    Library.Sections.Viewport = function(self, Data)
+        Data = Data or { }
+
+        local Viewport = {
+            Window = self.Window,
+            Page = self.Page,
+            Section = self,
+
+            Name = Data.Name or Data.name or "Viewport",
+            Height = Data.Height or Data.height or 180,
+            FieldOfView = Data.FieldOfView or Data.fieldofview or 50,
+            AutoRotate = Data.AutoRotate ~= false and Data.autorotate ~= false,
+            RotateSpeed = Data.RotateSpeed or Data.rotatespeed or 0.6,
+            DistanceMul = Data.DistanceMul or Data.distancemul or 1,
+        }
+
+        local NewViewport, ViewportItems = Components:Viewport({
+            Name = Viewport.Name,
+            Parent = Viewport.Section.Items["Content"],
+            Page = Viewport.Page,
+            Height = Viewport.Height,
+            FieldOfView = Viewport.FieldOfView,
+            AutoRotate = Viewport.AutoRotate,
+            RotateSpeed = Viewport.RotateSpeed,
+            DistanceMul = Viewport.DistanceMul,
+        })
+
+        return NewViewport
     end
 
     Library.Sections.Label = function(self, Name, Tooltip)
