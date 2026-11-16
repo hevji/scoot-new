@@ -7142,10 +7142,13 @@ local Library do
     end
 
     Library.CreateSettingsPage = function(self, Window, Watermark, KeybindList)
-        -- single screen: themes on the left, configs + settings stacked right
-        local SettingsPage = Window:Page({ Name = "Settings", Columns = 2 })
+        -- one subtab holding the whole thing: themes left, configs + settings
+        -- stacked right
+        local SettingsPage = Window:Page({ Name = "Settings", SubPages = true })
 
-        local ThemingSection = SettingsPage:Section({ Name = "Theming", Side = 1 }) do
+        local SettingsSubPage = SettingsPage:SubPage({ Name = "Settings", Columns = 2 })
+
+        local ThemingSection = SettingsSubPage:Section({ Name = "Theming", Side = 1 }) do
             for Index, Value in Library.Theme do 
                 ThemingSection:Label(Index):Colorpicker({
                     Name = Index,
@@ -7159,7 +7162,7 @@ local Library do
             end
         end
 
-        local ConfigsSection = SettingsPage:Section({ Name = "Configs", Side = 2 }) do
+        local ConfigsSection = SettingsSubPage:Section({ Name = "Configs", Side = 2 }) do
                     local ConfigName
                     local ConfigSelected
 
@@ -7231,7 +7234,7 @@ local Library do
                     Library:RefreshConfigsList(ConfigsSearchbox)
             end
 
-            local SettingsSection = SettingsPage:Section({ Name = "Settings", Side = 2 }) do
+            local SettingsSection = SettingsSubPage:Section({ Name = "Settings", Side = 2 }) do
                     SettingsSection:Toggle({
                         Name = "Watermark",
                         Flag = "Watermark",
