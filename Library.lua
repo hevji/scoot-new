@@ -89,6 +89,7 @@ local Library do
             ["Value"] = { "Value.png", "https://github.com/sametexe001/images/blob/main/value.png?raw=true" },
             ["Hue"] = { "Hue.png", "https://github.com/sametexe001/images/blob/main/horizontalhue.png?raw=true" },
             ["Checkers"] = { "Checkers.png", "https://github.com/sametexe001/images/blob/main/checkers.png?raw=true" },
+            ["ScarredLogo"] = { "ScarredLogo.png", "https://scarred.cc/favicon.png" },
         },
 
         -- Ignore below
@@ -254,7 +255,10 @@ local Library do
         local ImageLink = ImageData[2]
         
         if not isfile(Library.Folders.Assets .. "/" .. ImageName) then
-            writefile(Library.Folders.Assets .. "/" .. ImageName, game:HttpGet(ImageLink))
+            -- a dead host must not take down the whole library load
+            pcall(function()
+                writefile(Library.Folders.Assets .. "/" .. ImageName, game:HttpGet(ImageLink))
+            end)
         end
     end
 
@@ -5644,6 +5648,7 @@ local Library do
 
         local Window = { 
             Logo = Data.Logo or Data.logo or "",
+            LogoImage = Data.LogoImage or Data.logoimage or nil,
             FadeTime = Data.FadeTime or Data.fadetime or 0.4,
             Size = Data.Size or Data.size or UDim2New(0, 751, 0, 539),
 
@@ -5682,13 +5687,19 @@ local Library do
                 ScaleType = Enum.ScaleType.Fit,
                 BorderColor3 = FromRGB(0, 0, 0),
                 AnchorPoint = Vector2New(0.5, 0),
-                Image = "rbxassetid://" .. Window.Logo,
+                Image = Window.LogoImage or ("rbxassetid://" .. Window.Logo),
                 BackgroundTransparency = 1,
                 Position = UDim2New(0.5, 0, 0, 12),
                 Size = UDim2New(0, 75, 0, 75),
                 BorderSizePixel = 0,
                 BackgroundColor3 = FromRGB(255, 255, 255)
-            })  Items["Logo"]:AddToTheme({ImageColor3 = "Accent"})
+            })
+
+            -- asset-id logos are single-color glyphs that follow the accent;
+            -- real artwork keeps its own colors
+            if Window.LogoImage == nil then
+                Items["Logo"]:AddToTheme({ImageColor3 = "Accent"})
+            end
 
             Items["Search"] = Instances:Create("Frame", {
                 Parent = Items["Side"].Instance,
