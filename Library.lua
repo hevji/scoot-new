@@ -4643,6 +4643,25 @@ local Library do
                 ["Always"] = Items["Always"]
             }
 
+            -- optional mode whitelist: kicia specs restrict keybinds to
+            -- specific kinds (e.g. Target Lock is Tap-only); hide the rest
+            if type(Data.Modes) == "table" then
+                local Allowed = { }
+                for _, Mode in Data.Modes do
+                    if type(Mode) == "string" and Modes[Mode] ~= nil then
+                        Allowed[Mode] = true
+                    end
+                end
+
+                if next(Allowed) ~= nil then
+                    for Mode, Button in Modes do
+                        if not Allowed[Mode] then
+                            Button.Instance.Visible = false
+                        end
+                    end
+                end
+            end
+
             local Update = function()
                 if KeylistItem then
                     KeylistItem:SetText(Keybind.Value, Data.Name, Keybind.Mode)
