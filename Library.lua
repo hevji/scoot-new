@@ -234,7 +234,7 @@ local Library do
             ["Text"] = FromRGB(235, 235, 235),
             ["Text Stroke"] = FromRGB(0, 0, 0),
             ["Placeholder Text"] = FromRGB(185, 185, 185),
-            ["Accent"] = FromRGB(202, 243, 255)
+            ["Accent"] = FromRGB(255, 255, 255)
         }
     }
 
@@ -3527,7 +3527,7 @@ local Library do
                     Size = UDim2New(0, 15, 0, 15),
                     BorderSizePixel = 2,
                     TextSize = 14,
-                    BackgroundColor3 = FromRGB(157, 175, 255)
+                    BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["ColorpickerButton"]:AddToTheme({BorderColor3 = "Border"})
 
                 Instances:Create("UIStroke", {
@@ -3545,7 +3545,7 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(1, -2, 1, -2),
                     BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(157, 175, 255)
+                    BackgroundColor3 = FromRGB(255, 255, 255)
                 })
 
                 Instances:Create("UIGradient", {
@@ -5792,11 +5792,9 @@ local Library do
                 BackgroundColor3 = FromRGB(255, 255, 255)
             })
 
-            -- asset-id logos are single-color glyphs that follow the accent;
-            -- real artwork keeps its own colors
-            if Window.LogoImage == nil then
-                Items["Logo"]:AddToTheme({ImageColor3 = "Accent"})
-            end
+            -- white/grayscale artwork tints cleanly with the accent, so every
+            -- logo follows the theme
+            Items["Logo"]:AddToTheme({ImageColor3 = "Accent"})
 
             Items["Search"] = Instances:Create("Frame", {
                 Parent = Items["Side"].Instance,
