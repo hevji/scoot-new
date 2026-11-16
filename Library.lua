@@ -1951,6 +1951,10 @@ local Library do
                     SubItems["NewButton"].Instance.Visible = Bool
                 end
 
+                function NewButton:SetText(Text)
+                    SubItems["Text"].Instance.Text = tostring(Text)
+                end
+
                 local PageSearchData = Library.SearchItems[Data.Page]
 
                 if PageSearchData then
@@ -4450,7 +4454,7 @@ local Library do
 
             local KeylistItem
 
-            if Library.KeyList then
+            if Data.Keylist ~= false and Library.KeyList then
                 KeylistItem = Library.KeyList:Add("", "", "")
             end
 
@@ -4770,28 +4774,6 @@ local Library do
             end)
 
             Library:Connect(UserInputService.InputBegan, function(Input)
-                if Keybind.Value == "None" then
-                    return
-                end
-
-                if tostring(Input.KeyCode) == Keybind.Key then
-                    if Keybind.Mode == "Toggle" then 
-                        Keybind:Press()
-                    elseif Keybind.Mode == "Hold" then 
-                        Keybind:Press(true)
-                    elseif Keybind.Mode == "Always" then 
-                        Keybind:Press(true)
-                    end
-                elseif tostring(Input.UserInputType) == Keybind.Key then
-                    if Keybind.Mode == "Toggle" then 
-                        Keybind:Press()
-                    elseif Keybind.Mode == "Hold" then 
-                        Keybind:Press(true)
-                    elseif Keybind.Mode == "Always" then 
-                        Keybind:Press(true)
-                    end
-                end
-
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 then
                     if not Keybind.IsOpen then
                         return
@@ -4802,6 +4784,33 @@ local Library do
                     end
 
                     Keybind:SetOpen(false)
+                end
+            end)
+
+            -- the adapter (or any embedder) can drive state itself and skip
+            -- scoot's own key handling entirely
+            if Data.Input ~= false then
+            Library:Connect(UserInputService.InputBegan, function(Input)
+                if Keybind.Value == "None" then
+                    return
+                end
+
+                if tostring(Input.KeyCode) == Keybind.Key then
+                    if Keybind.Mode == "Toggle" then
+                        Keybind:Press()
+                    elseif Keybind.Mode == "Hold" then
+                        Keybind:Press(true)
+                    elseif Keybind.Mode == "Always" then
+                        Keybind:Press(true)
+                    end
+                elseif tostring(Input.UserInputType) == Keybind.Key then
+                    if Keybind.Mode == "Toggle" then
+                        Keybind:Press()
+                    elseif Keybind.Mode == "Hold" then
+                        Keybind:Press(true)
+                    elseif Keybind.Mode == "Always" then
+                        Keybind:Press(true)
+                    end
                 end
             end)
 
@@ -4824,6 +4833,7 @@ local Library do
                     end
                 end
             end)
+            end
 
             Items["Toggle"]:Connect("MouseButton1Down", function()
                 Keybind.Mode = "Toggle"
@@ -5421,6 +5431,10 @@ local Library do
 
         function Watermark:SetVisibility(Bool)
             Items["Watermark"].Instance.Visible = Bool
+        end
+
+        function Watermark:SetText(Text)
+            Items["Text"].Instance.Text = Text
         end
 
         return Watermark
