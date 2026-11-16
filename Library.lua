@@ -6844,6 +6844,8 @@ local Library do
                 Flag = Keybind.Flag,
                 Default = Keybind.Default,
                 Mode = Keybind.Mode,
+                Input = Data.Input,
+                Keylist = Data.Keylist,
                 Callback = Keybind.Callback
             })
 
@@ -7103,6 +7105,8 @@ local Library do
                 Flag = Keybind.Flag,
                 Default = Keybind.Default,
                 Mode = Keybind.Mode,
+                Input = Data.Input,
+                Keylist = Data.Keylist,
                 Callback = Keybind.Callback
             })
 
