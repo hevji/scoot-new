@@ -800,40 +800,104 @@ local Library do
 
     -- Custom font
     local CustomFont = { } do
+        local function fontBytesOk(Source)
+            if type(Source) ~= "string" or #Source < 1024 then
+                return false
+            end
+
+            local Magic = Source:sub(1, 4)
+
+            return Magic == "\0\1\0\0" or Magic == "true" or Magic == "ttcf" or Magic == "OTTO"
+        end
+
         function CustomFont:New(Name, Weight, Style, Data)
-            if isfile(Library.Folders.Assets .. "/" .. Name .. ".json") then
-                return Font.new(getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".json"))
+            local TtfPath = Library.Folders.Assets .. "/" .. Name .. ".ttf"
+            local JsonPath = Library.Folders.Assets .. "/" .. Name .. ".json"
+
+            if isfile(JsonPath) then
+                local Ok, Font = pcall(function()
+                    return Font.new(getcustomasset(JsonPath))
+                end)
+
+                if Ok then
+                    return Font
+                end
             end
 
-            if not isfile(Library.Folders.Assets .. "/" .. Name .. ".ttf") then 
-                writefile(Library.Folders.Assets .. "/" .. Name .. ".ttf", game:HttpGet(Data.Url))
+            -- a cached file that isn't actually a font (bad download, HTML
+            -- error page) must be replaced, not trusted
+            if not isfile(TtfPath) or not fontBytesOk(readfile(TtfPath)) then
+                local Ok, Source = pcall(function()
+                    return game:HttpGet(Data.Url)
+                end)
+
+                if not Ok or not fontBytesOk(Source) then
+                    return nil
+                end
+
+                pcall(function()
+                    if isfile(TtfPath) then
+                        delfile(TtfPath)
+                    end
+
+                    writefile(TtfPath, Source)
+                end)
             end
 
-            local FontData = {
-                name = Name,
-                faces = { {
-                    name = "Regular",
-                    weight = Weight,
-                    style = Style,
-                    assetId = getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".ttf")
-                } }
-            }
+            local AssetOk, AssetId = pcall(getcustomasset, TtfPath)
 
-            writefile(Library.Folders.Assets .. "/" .. Name .. ".json", HttpService:JSONEncode(FontData))
-            return Font.new(getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".json"))
+            if not AssetOk then
+                return nil
+            end
+
+            pcall(function()
+                local FontData = {
+                    name = Name,
+                    faces = { {
+                        name = "Regular",
+                        weight = Weight,
+                        style = Style,
+                        assetId = AssetId
+                    } }
+                }
+
+                writefile(JsonPath, HttpService:JSONEncode(FontData))
+            end)
+
+            local JsonOk, Font = pcall(function()
+                return Font.new(getcustomasset(JsonPath))
+            end)
+
+            if JsonOk then
+                return Font
+            end
+
+            local FallbackOk, Fallback = pcall(function()
+                return Font.new(AssetId)
+            end)
+
+            return FallbackOk and Fallback or nil
         end
 
         function CustomFont:Get(Name)
             if isfile(Library.Folders.Assets .. "/" .. Name .. ".json") then
-                return Font.new(getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".json"))
+                local Ok, Font = pcall(function()
+                    return Font.new(getcustomasset(Library.Folders.Assets .. "/" .. Name .. ".json"))
+                end)
+
+                return Ok and Font or nil
             end
         end
 
-        CustomFont:New("Monaco", 400, "Regular", {
-            Url = "https://github.com/sametexe001/luas/raw/refs/heads/main/fonts/Monaco.ttf"
+        local Monaco = CustomFont:New("Monaco", 400, "Regular", {
+            -- raw host: the github.com blob URL can serve HTML instead of the
+            -- font and the garbage would get cached as Monaco.ttf
+            Url = "https://raw.githubusercontent.com/sametexe001/luas/main/fonts/Monaco.ttf"
         })
 
-        Library.Font = CustomFont:Get("Monaco")
+        -- built-in Monaco keeps the look when the download/getcustomasset
+        -- path fails outright
+        Library.Font = Monaco or Font.new("rbxasset://fonts/families/Monaco.json")
     end
 
     Library.Holder = Instances:Create("ScreenGui", {
@@ -917,7 +981,12 @@ local Library do
     end
 
     Library.Round = function(self, Number, Float)
-        local Multiplier = 1 / (Float or 1)
+        -- Float is the granularity (1 = integers, 0.01 = hundredths);
+        -- 0/nil must not produce 1/0 = inf -> nan
+        if Float == nil or Float <= 0 then
+            Float = 1
+        end
+        local Multiplier = 1 / Float
         return MathFloor(Number * Multiplier) / Multiplier
     end
 
@@ -2226,7 +2295,7 @@ local Library do
                     Parent = Items["Label"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
-                    TextColor3 = FromRGB(235, 235, 235),
+                    TextColor3 = Data.TextColor or FromRGB(235, 235, 235),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Text = Data.Name,
                     Size = UDim2New(0, 0, 0, 15),
@@ -2238,7 +2307,9 @@ local Library do
                     AutomaticSize = Enum.AutomaticSize.X,
                     TextSize = 9,
                     BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
+                })  if Data.TextColor == nil then
+                    Items["Text"]:AddToTheme({TextColor3 = "Text"})
+                end
 
                 Items["Text"]:TextBorder()
 
@@ -2653,7 +2724,7 @@ local Library do
                     if type(Item.Render) == "function" then
                         -- kicia-style tile previews: the item hands back a
                         -- render hook that draws over the tile and can hide
-                        -- the stock image
+                        -- the stock image; kicia's hooks take (Item, Target)
                         local Content = Instances:Create("Frame", {
                             Parent = Inner.Instance,
                             Name = "\0",
@@ -2663,7 +2734,7 @@ local Library do
                             Size = UDim2New(1, -6, 1, -6)
                         })
 
-                        Library:SafeCall(Item.Render, {
+                        Library:SafeCall(Item.Render, Item, {
                             Content = Content.Instance,
                             HideImage = function()
                                 if ImageLabel ~= nil then
@@ -7038,7 +7109,7 @@ local Library do
         return NewViewport
     end
 
-    Library.Sections.Label = function(self, Name, Tooltip)
+    Library.Sections.Label = function(self, Name, Tooltip, Options)
         local Label = {
             Window = self.Window,
             Page = self.Page,
@@ -7051,6 +7122,7 @@ local Library do
             Name = Label.Name,
             Parent = Label.Section.Items["Content"],
             Page = Label.Page,
+            TextColor = Options and Options.TextColor or nil,
         })
 
         if Tooltip then
