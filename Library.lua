@@ -2299,44 +2299,35 @@ local Library do
                 Items["Card"] = Instances:Create("Frame", {
                     Parent = Items["Viewport"].Instance,
                     Name = "\0",
-                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderColor3 = FromRGB(42, 49, 45),
                     Position = UDim2New(0, 0, 0, 20),
                     Size = UDim2New(1, 0, 1, -20),
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Card"]:AddToTheme({BackgroundColor3 = "Element", BorderColor3 = "Border"})
+                    BorderSizePixel = 2,
+                    BackgroundColor3 = FromRGB(20, 24, 21)
+                })  Items["Card"]:AddToTheme({BackgroundColor3 = "Inline", BorderColor3 = "Outline"})
 
-                Instances:Create("UICorner", {
+                Items["Card"]:Border("Border")
+
+                Items["Render"] = Instances:Create("ViewportFrame", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
-                    CornerRadius = UDimNew(0, 6)
-                })
+                    Position = UDim2New(0, 6, 0, 6),
+                    Size = UDim2New(1, -12, 1, -12),
+                    BorderColor3 = FromRGB(12, 12, 12),
+                    BorderSizePixel = 2,
+                    LightDirection = Vector3.new(-1, -0.5, -1).Unit,
+                    LightColor = FromRGB(255, 255, 255),
+                    Ambient = FromRGB(140, 140, 150),
+                    CurrentCamera = Camera.Instance
+                })  Items["Render"]:AddToTheme({BackgroundColor3 = "Background", BorderColor3 = "Border"})
 
                 Instances:Create("UIStroke", {
-                    Parent = Items["Card"].Instance,
+                    Parent = Items["Render"].Instance,
                     Name = "\0",
                     Color = FromRGB(42, 49, 45),
                     LineJoinMode = Enum.LineJoinMode.Miter,
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 }):AddToTheme({Color = "Outline"})
-
-                Items["Render"] = Instances:Create("ViewportFrame", {
-                    Parent = Items["Card"].Instance,
-                    Name = "\0",
-                    Size = UDim2New(1, 0, 1, 0),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    LightDirection = Vector3.new(-1, -0.5, -1).Unit,
-                    LightColor = FromRGB(255, 255, 255),
-                    Ambient = FromRGB(140, 140, 150),
-                    CurrentCamera = Camera.Instance
-                })
-
-                Instances:Create("UICorner", {
-                    Parent = Items["Render"].Instance,
-                    Name = "\0",
-                    CornerRadius = UDimNew(0, 6)
-                })
 
                 WorldModel.Instance.Parent = Items["Render"].Instance
 
@@ -5897,12 +5888,66 @@ local Library do
 
         local WindowFadeInstances = nil
 
-        Items["Window"].Instance.DescendantAdded:Connect(function()
+        -- every ViewportFrame under the window registers here; its camera is
+        -- parked on close and re-attached a few per frame on open, so ~140
+        -- cosmetic viewports don't rasterize in a single frame
+        local TileViewports = { }
+        local ParkedCameras = { }
+        local ParkStepped = nil
+
+        local function ParkTileViewports()
+            -- stop a running unpark first: already-attached cameras are parked
+            -- below, unattached ones simply stay queued for the next open
+            if ParkStepped then
+                ParkStepped:Disconnect()
+                ParkStepped = nil
+            end
+
+            for Viewport in TileViewports do
+                local Camera = Viewport.CurrentCamera
+
+                if Camera then
+                    Viewport.CurrentCamera = nil
+                    TableInsert(ParkedCameras, { Viewport = Viewport, Camera = Camera })
+                end
+            end
+        end
+
+        local function UnparkTileViewports()
+            if ParkStepped then
+                return
+            end
+
+            ParkStepped = RunService.RenderStepped:Connect(function()
+                local Attached = 0
+
+                while Attached < 12 and #ParkedCameras > 0 do
+                    local Entry = TableRemove(ParkedCameras)
+
+                    if TileViewports[Entry.Viewport] then
+                        Entry.Viewport.CurrentCamera = Entry.Camera
+                        Attached = Attached + 1
+                    end
+                end
+
+                if #ParkedCameras == 0 then
+                    ParkStepped:Disconnect()
+                    ParkStepped = nil
+                end
+            end)
+        end
+
+        Items["Window"].Instance.DescendantAdded:Connect(function(Child)
             WindowFadeInstances = nil
+
+            if Child:IsA("ViewportFrame") then
+                TileViewports[Child] = true
+            end
         end)
 
-        Items["Window"].Instance.DescendantRemoving:Connect(function()
+        Items["Window"].Instance.DescendantRemoving:Connect(function(Child)
             WindowFadeInstances = nil
+            TileViewports[Child] = nil
         end)
 
         -- viewport content (3D cosmetic tiles) is pure tween junk: hundreds of
@@ -5924,14 +5969,20 @@ local Library do
 
         local MouseStepped = nil
         local SavedMouseBehavior = nil
+        local SavedMouseIcon = nil
 
-        -- the game re-locks/re-shows the OS cursor every frame, so the menu
-        -- state has to be enforced while it is open
+        -- capture the game's mouse state when opening and put it back on
+        -- close; hardcoding true on close fights the game's own cursor loop
+        -- (kicia does the same)
         local function ApplyMouseState()
             if Window.IsOpen then
                 Items["MouseBackground"].Instance.Visible = true
-                UserInputService.MouseIconEnabled = false
-                SavedMouseBehavior = UserInputService.MouseBehavior
+
+                if not MouseStepped then
+                    SavedMouseBehavior = UserInputService.MouseBehavior
+                    SavedMouseIcon = UserInputService.MouseIconEnabled
+                end
+
                 UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 
                 if not MouseStepped then
@@ -5945,10 +5996,18 @@ local Library do
                         end
                     end)
                 end
+
+                UserInputService.MouseIconEnabled = false
             else
                 Items["MouseBackground"].Instance.Visible = false
-                UserInputService.MouseIconEnabled = true
-                UserInputService.MouseBehavior = SavedMouseBehavior or Enum.MouseBehavior.Default
+                UserInputService.MouseBehavior = SavedMouseBehavior or UserInputService.MouseBehavior
+
+                if SavedMouseIcon ~= nil then
+                    UserInputService.MouseIconEnabled = SavedMouseIcon
+                end
+
+                SavedMouseBehavior = nil
+                SavedMouseIcon = nil
 
                 if MouseStepped then
                     MouseStepped:Disconnect()
@@ -5999,6 +6058,14 @@ local Library do
 
                 Debounce = false 
                 Items["Window"].Instance.Visible = Window.IsOpen
+
+                if not Window.IsOpen then
+                    ParkTileViewports()
+                end
+            end
+
+            if Window.IsOpen then
+                UnparkTileViewports()
             end
 
             if NewTween then
@@ -7061,25 +7128,24 @@ local Library do
     end
 
     Library.CreateSettingsPage = function(self, Window, Watermark, KeybindList)
-        local SettingsPage = Window:Page({Name = "Settings", SubPages = true}) do 
-            local ThemingSubPage = SettingsPage:SubPage({Name = "Theming", Columns = 2}) do 
-                local ThemesSection = ThemingSubPage:Section({Name = "Themes", Side = 1}) do
-                    for Index, Value in Library.Theme do 
-                        ThemesSection:Label(Index):Colorpicker({
-                            Name = Index,
-                            Flag = Index.."Theme",
-                            Default = Value,
-                            Callback = function(Value)
-                                Library.Theme[Index] = Value
-                                Library:ChangeTheme(Index, Value)
-                            end
-                        })
-                    end
-                end
-            end
+        -- single screen: themes on the left, configs + settings stacked right
+        local SettingsPage = Window:Page({ Name = "Settings", Columns = 2 })
 
-            local ConfigsSubPage = SettingsPage:SubPage({Name = "Configs", Columns = 2}) do 
-                local ConfigsSection = ConfigsSubPage:Section({Name = "Configs", Side = 1}) do
+        local ThemingSection = SettingsPage:Section({ Name = "Theming", Side = 1 }) do
+            for Index, Value in Library.Theme do 
+                ThemingSection:Label(Index):Colorpicker({
+                    Name = Index,
+                    Flag = Index.."Theme",
+                    Default = Value,
+                    Callback = function(Value)
+                        Library.Theme[Index] = Value
+                        Library:ChangeTheme(Index, Value)
+                    end
+                })
+            end
+        end
+
+        local ConfigsSection = SettingsPage:Section({ Name = "Configs", Side = 2 }) do
                     local ConfigName
                     local ConfigSelected
 
@@ -7149,11 +7215,9 @@ local Library do
                     end)
 
                     Library:RefreshConfigsList(ConfigsSearchbox)
-                end
             end
 
-            local SettingsSubPage = SettingsPage:SubPage({Name = "Settings", Columns = 2}) do 
-                local SettingsSection = SettingsSubPage:Section({Name = "Settings", Side = 1}) do
+            local SettingsSection = SettingsPage:Section({ Name = "Settings", Side = 2 }) do
                     SettingsSection:Toggle({
                         Name = "Watermark",
                         Flag = "Watermark",
@@ -7229,10 +7293,8 @@ local Library do
                             Library.MenuKeybind = Library.Flags["UIKeybind"].Key
                         end
                     })
-                end
             end
-        end
-        
+
         return SettingsPage
     end
 end
