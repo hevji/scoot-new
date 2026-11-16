@@ -2547,7 +2547,7 @@ local Library do
                     if TileName == Name then
                         Record.Stroke.Instance.Color = Library.Theme["Accent"]
                     else
-                        Record.Stroke.Instance.Color = Library.Theme["Outline"]
+                        Record.Stroke.Instance.Color = Library.Theme["Border"]
                     end
                 end
             end
@@ -2565,37 +2565,51 @@ local Library do
                         Name = "\0",
                         Text = "",
                         AutoButtonColor = false,
-                        BackgroundColor3 = FromRGB(255, 255, 255),
-                        BorderSizePixel = 0
-                    })  Tile:AddToTheme({BackgroundColor3 = "Element"})
-
-                    Instances:Create("UICorner", {
-                        Parent = Tile.Instance,
-                        Name = "\0",
-                        CornerRadius = UDimNew(0, 6)
-                    })
+                        BackgroundColor3 = FromRGB(20, 24, 21),
+                        BorderColor3 = FromRGB(42, 49, 45),
+                        BorderSizePixel = 2
+                    })  Tile:AddToTheme({BackgroundColor3 = "Inline", BorderColor3 = "Outline"})
 
                     local Stroke = Instances:Create("UIStroke", {
                         Parent = Tile.Instance,
                         Name = "\0",
-                        Color = FromRGB(42, 49, 45),
+                        Color = FromRGB(12, 12, 12),
                         LineJoinMode = Enum.LineJoinMode.Miter,
                         ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                     })
 
-                    Stroke:AddToTheme({Color = "Outline"})
+                    Stroke:AddToTheme({Color = "Border"})
+
+                    -- inner content well: same layering as the section boxes
+                    local Inner = Instances:Create("Frame", {
+                        Parent = Tile.Instance,
+                        Name = "\0",
+                        Position = UDim2New(0, 4, 0, 4),
+                        Size = UDim2New(1, -8, 1, -27),
+                        BackgroundColor3 = FromRGB(14, 17, 15),
+                        BorderColor3 = FromRGB(12, 12, 12),
+                        BorderSizePixel = 2
+                    })  Inner:AddToTheme({BackgroundColor3 = "Background", BorderColor3 = "Border"})
+
+                    Instances:Create("UIStroke", {
+                        Parent = Inner.Instance,
+                        Name = "\0",
+                        Color = FromRGB(42, 49, 45),
+                        LineJoinMode = Enum.LineJoinMode.Miter,
+                        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    }):AddToTheme({Color = "Outline"})
 
                     local ImageLabel = nil
 
                     if type(Item.Image) == "string" and Item.Image ~= "" then
                         ImageLabel = Instances:Create("ImageLabel", {
-                            Parent = Tile.Instance,
+                            Parent = Inner.Instance,
                             Name = "\0",
                             Image = Item.Image,
                             BackgroundTransparency = 1,
                             BorderSizePixel = 0,
-                            Position = UDim2New(0, 5, 0, 5),
-                            Size = UDim2New(1, -10, 1, -29)
+                            Position = UDim2New(0, 3, 0, 3),
+                            Size = UDim2New(1, -6, 1, -6)
                         })
                     end
 
@@ -2604,12 +2618,12 @@ local Library do
                         -- render hook that draws over the tile and can hide
                         -- the stock image
                         local Content = Instances:Create("Frame", {
-                            Parent = Tile.Instance,
+                            Parent = Inner.Instance,
                             Name = "\0",
                             BackgroundTransparency = 1,
                             BorderSizePixel = 0,
-                            Position = UDim2New(0, 5, 0, 5),
-                            Size = UDim2New(1, -10, 1, -29)
+                            Position = UDim2New(0, 3, 0, 3),
+                            Size = UDim2New(1, -6, 1, -6)
                         })
 
                         Library:SafeCall(Item.Render, {
