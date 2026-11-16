@@ -5656,6 +5656,7 @@ local Library do
             Items = { },
 
             IsOpen = false,
+            Generation = 0,
         }
 
         local Items = Components:Window({
@@ -5904,6 +5905,23 @@ local Library do
             WindowFadeInstances = nil
         end)
 
+        -- viewport content (3D cosmetic tiles) is pure tween junk: hundreds of
+        -- models/parts per page, and DescendantAdded during tile building would
+        -- otherwise force a full re-cache every frame
+        local function IsInsideViewport(Instance)
+            local Ancestor = Instance.Parent
+
+            while Ancestor and Ancestor ~= Items["Window"].Instance do
+                if Ancestor:IsA("ViewportFrame") then
+                    return true
+                end
+
+                Ancestor = Ancestor.Parent
+            end
+
+            return false
+        end
+
         local MouseStepped = nil
         local SavedMouseBehavior = nil
 
@@ -5946,6 +5964,9 @@ local Library do
 
             Window.IsOpen = Bool
 
+            -- restore/hide the cursor immediately; the tween must not gate it
+            ApplyMouseState()
+
             Debounce = true 
 
             if Window.IsOpen then 
@@ -5953,16 +5974,31 @@ local Library do
             end
 
             if not WindowFadeInstances then
-                WindowFadeInstances = Items["Window"].Instance:GetDescendants()
+                WindowFadeInstances = { }
+
+                for Index, Item in Items["Window"].Instance:GetDescendants() do
+                    if not IsInsideViewport(Item) then
+                        TableInsert(WindowFadeInstances, Item)
+                    end
+                end
+
                 TableInsert(WindowFadeInstances, Items["Window"].Instance)
             end
 
             local NewTween = Tween:FadePairs(WindowFadeInstances, Bool, Library.FadeSpeed)
 
+            -- generation token so a late tween Completed can't release the
+            -- debounce for a newer open/close cycle
+            local Generation = Window.Generation + 1
+            Window.Generation = Generation
+
             local function OnFadeCompleted()
+                if Generation ~= Window.Generation then
+                    return
+                end
+
                 Debounce = false 
                 Items["Window"].Instance.Visible = Window.IsOpen
-                ApplyMouseState()
             end
 
             if NewTween then
@@ -5970,6 +6006,14 @@ local Library do
             else
                 OnFadeCompleted()
             end
+
+            -- safety net: never let a dead tween lock the menu forever
+            task.delay((Library.FadeSpeed or 0.2) + 0.5, function()
+                if Generation == Window.Generation and Debounce then
+                    Debounce = false
+                    Items["Window"].Instance.Visible = Window.IsOpen
+                end
+            end)
         end
 
         Library:Connect(UserInputService.InputBegan, function(Input)
@@ -6593,7 +6637,7 @@ local Library do
                 Section = self.Section,
 
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                Default = Data.Default or Data.default or Enum.KeyCode.RightShift,
+                Default = Data.Default or Data.default,
                 Callback = Data.Callback or Data.callback or function() end,
                 Mode = Data.Mode or Data.mode or "Toggle",
             }
@@ -6852,7 +6896,7 @@ local Library do
                 Section = self.Section,
 
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                Default = Data.Default or Data.default or Enum.KeyCode.RightShift,
+                Default = Data.Default or Data.default,
                 Callback = Data.Callback or Data.callback or function() end,
                 Mode = Data.Mode or Data.mode or "Toggle",
             }
