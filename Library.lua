@@ -79,9 +79,9 @@ local Library do
         FadeSpeed = 0.2,
 
         Folders = {
-            Directory = "scoot",
-            Configs = "scoot/Configs",
-            Assets = "scoot/Assets",
+            Directory = "scarred-cc",
+            Configs = "scarred-cc/Configs",
+            Assets = "scarred-cc/Assets",
         },
 
         Images = {
