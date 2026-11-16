@@ -2355,7 +2355,7 @@ local Library do
                 )
             end
 
-            function Viewport:SetModel(Model)
+            function Viewport:SetModel(Model, Transform)
                 if Viewport.Model ~= nil and Viewport.Model.Parent == WorldModel.Instance then
                     Viewport.Model:Destroy()
                 end
@@ -2370,6 +2370,10 @@ local Library do
                             if Descendant:IsA("LuaSourceContainer") then
                                 Descendant:Destroy()
                             end
+                        end
+
+                        if type(Transform) == "function" then
+                            Library:SafeCall(Transform, Clone)
                         end
 
                         Clone.Parent = WorldModel.Instance
@@ -2579,8 +2583,10 @@ local Library do
 
                     Stroke:AddToTheme({Color = "Outline"})
 
+                    local ImageLabel = nil
+
                     if type(Item.Image) == "string" and Item.Image ~= "" then
-                        Instances:Create("ImageLabel", {
+                        ImageLabel = Instances:Create("ImageLabel", {
                             Parent = Tile.Instance,
                             Name = "\0",
                             Image = Item.Image,
@@ -2588,6 +2594,29 @@ local Library do
                             BorderSizePixel = 0,
                             Position = UDim2New(0, 4, 0, 4),
                             Size = UDim2New(1, -8, 1, -20)
+                        })
+                    end
+
+                    if type(Item.Render) == "function" then
+                        -- kicia-style tile previews: the item hands back a
+                        -- render hook that draws over the tile and can hide
+                        -- the stock image
+                        local Content = Instances:Create("Frame", {
+                            Parent = Tile.Instance,
+                            Name = "\0",
+                            BackgroundTransparency = 1,
+                            BorderSizePixel = 0,
+                            Position = UDim2New(0, 4, 0, 4),
+                            Size = UDim2New(1, -8, 1, -20)
+                        })
+
+                        Library:SafeCall(Item.Render, {
+                            Content = Content.Instance,
+                            HideImage = function()
+                                if ImageLabel ~= nil then
+                                    ImageLabel.Instance.Visible = false
+                                end
+                            end,
                         })
                     end
 
