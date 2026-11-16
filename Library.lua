@@ -1306,6 +1306,12 @@ local Library do
                         SortOrder = Enum.SortOrder.LayoutOrder
                     })
 
+                    -- bare windows float the subtab bar centered at the top
+                    if Data.Window and Data.Window.Sidebar == false then
+                        Items["SubPages"].Instance.AnchorPoint = Vector2New(0.5, 0)
+                        Items["SubPages"].Instance.Position = UDim2New(0.5, 0, 0, 0)
+                    end
+
                     Items["Columns"] = Instances:Create("Frame", {
                         Parent = Items["Page"].Instance,
                         Name = "\0",
@@ -5736,6 +5742,16 @@ local Library do
             Generation = 0,
         }
 
+        Window.Sidebar = Data.Sidebar
+
+        if Window.Sidebar == nil then
+            Window.Sidebar = Data.sidebar
+        end
+
+        if Window.Sidebar == nil then
+            Window.Sidebar = true
+        end
+
         local Items = Components:Window({
             Parent = Library.Holder,
             Draggable = true,
@@ -5745,6 +5761,10 @@ local Library do
                 or UDim2New(0, Camera.ViewportSize.X / 3.3, 0, Camera.ViewportSize.Y / 3.3),
             Size = Window.Size
         }) do
+            Items["Window"].Instance.Visible = false
+
+            -- bare windows skip the sidebar, logo and search entirely
+            if Window.Sidebar then
             Items["Side"] = Instances:Create("Frame", {
                 Parent = Items["Window"].Instance,
                 Name = "\0",
@@ -5756,8 +5776,6 @@ local Library do
             })  Items["Side"]:AddToTheme({BackgroundColor3 = "Inline", BorderColor3 = "Outline"})
             
             Items["Side"]:Border("Border")
-
-            Items["Window"].Instance.Visible = false
 
             Items["Logo"] = Instances:Create("ImageLabel", {
                 Parent = Items["Side"].Instance,
@@ -5884,17 +5902,31 @@ local Library do
                 Name = "\0",
                 CornerRadius = UDimNew(1, 0)
             })
+            end
 
             Items["Content"] = Instances:Create("Frame", {
                 Parent = Items["Window"].Instance,
                 Name = "\0",
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 226, 0, 12),
+                Position = Window.Sidebar and UDim2New(0, 226, 0, 12) or UDim2New(0, 12, 0, 12),
                 BorderColor3 = FromRGB(0, 0, 0),
-                Size = UDim2New(1, -238, 1, -24),
+                Size = Window.Sidebar and UDim2New(1, -238, 1, -24) or UDim2New(1, -24, 1, -24),
                 BorderSizePixel = 0,
                 BackgroundColor3 = FromRGB(255, 255, 255)
             })
+
+            -- bare windows still need the pages holder for page construction;
+            -- its nav buttons just never show
+            if Items["Pages"] == nil then
+                Items["Pages"] = Instances:Create("Frame", {
+                    Parent = Items["Content"].Instance,
+                    Name = "\0",
+                    Visible = false,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, 0, 1, 0)
+                })
+            end
 
             Items["MouseBackground"] = Instances:Create("Frame", {
                 Parent = Library.Holder.Instance,
@@ -5934,6 +5966,7 @@ local Library do
 
         local Debounce = false
 
+        if Items["Input"] then
         Items["Input"]:Connect("Focused", function()
             Items["Search"]:Tween(nil, {BackgroundTransparency = 0})
             Items["SearchStroke"]:Tween(nil, {Transparency = 0})
@@ -5953,6 +5986,7 @@ local Library do
             Items["Search"]:ChangeItemTheme({BackgroundColor3 = "Background", BorderColor3 = "Border"})
             Items["Search"]:Tween(nil, {BackgroundColor3 = Library.Theme.Background})
         end)
+        end
 
         Library:Connect(RunService.RenderStepped, function()
             local MouseLocation = UserInputService:GetMouseLocation() 
@@ -6156,6 +6190,7 @@ local Library do
 
         local SearchStepped
 
+        if Items["Input"] then
         Items["Input"]:Connect("Focused", function()
             local PageSearchData = Library.SearchItems[Library.CurrentPage]
 
@@ -6192,6 +6227,7 @@ local Library do
                 SearchStepped = nil
             end
         end)
+        end
 
         if Data.AutoOpen == nil then
             if Data.autoopen == nil then
