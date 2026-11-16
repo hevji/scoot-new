@@ -973,11 +973,19 @@ local Library do
     Library.GetImage = function(self, Image)
         local ImageData = self.Images[Image]
 
-        if not ImageData then 
-            return
+        if not ImageData then
+            return nil
         end
 
-        return getcustomasset(self.Folders.Assets .. "/" .. ImageData[1])
+        local Path = self.Folders.Assets .. "/" .. ImageData[1]
+
+        if not isfile(Path) then
+            return nil
+        end
+
+        local Ok, Asset = pcall(getcustomasset, Path)
+
+        return Ok and Asset or nil
     end
 
     Library.Round = function(self, Number, Float)
@@ -4504,6 +4512,10 @@ local Library do
 
             Library.Colorpickers[Colorpicker] = Colorpicker
 
+            function Colorpicker:SetVisibility(Bool)
+                Items["ColorpickerButton"].Instance.Visible = Bool
+            end
+
             Library.SetFlags[Colorpicker.Flag] = function(Value, Alpha)
                 Colorpicker:Set(Value, Alpha)
             end
@@ -4644,6 +4656,31 @@ local Library do
 
             function Keybind:Set(Key)
                 if StringFind(tostring(Key), "Enum") then 
+                    -- Escape (kicia's unbind key) and Backspace must never
+                    -- become a real bind: they can't be triggered in-game
+                    -- (Escape is always game-processed) and Backspace already
+                    -- displays as "None"
+                    if Key.Name == "Escape" or Key.Name == "Backspace" then
+                        Keybind.Key = ""
+                        Keybind.Value = "None"
+                        Items["KeyButton"].Instance.Text = "None"
+
+                        Library.Flags[Keybind.Flag] = {
+                            Mode = Keybind.Mode,
+                            Key = Keybind.Key,
+                            Toggled = Keybind.Toggled
+                        }
+
+                        if Data.Callback then 
+                            Library:SafeCall(Data.Callback, Keybind.Toggled)
+                        end
+
+                        Update()
+
+                        Keybind.Picking = false
+                        return
+                    end
+
                     Keybind.Key = tostring(Key)
 
                     Key = Key.Name == "Backspace" and "None" or Key.Name
@@ -4832,7 +4869,17 @@ local Library do
                 end)
 
                 local InputBegan
-                InputBegan = UserInputService.InputBegan:Connect(function(Input)
+                InputBegan = UserInputService.InputBegan:Connect(function(Input, Processed)
+                    -- kicia ignored game-processed keyboard input (chat etc.);
+                    -- Escape stays a valid unbind either way
+                    if
+                        Processed
+                        and Input.UserInputType == Enum.UserInputType.Keyboard
+                        and Input.KeyCode ~= Enum.KeyCode.Escape
+                    then
+                        return
+                    end
+
                     if Input.UserInputType == Enum.UserInputType.Keyboard then 
                         Keybind:Set(Input.KeyCode)
                     else
@@ -4942,7 +4989,11 @@ local Library do
                 Keybind:Set(Value)
             end
 
-            return Keybind, Items 
+            function Keybind:SetVisibility(Bool)
+                Items["KeyButton"].Instance.Visible = Bool
+            end
+
+            return Keybind, Items
         end
 
         Components.Textbox = function(self, Data)
