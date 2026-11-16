@@ -2536,9 +2536,16 @@ local Library do
                 Instances:Create("UIGridLayout", {
                     Parent = Items["Scroll"].Instance,
                     Name = "\0",
-                    CellSize = UDim2New(0, Data.CellSize or 62, 0, Data.CellSize or 62),
-                    CellPadding = UDim2New(0, 5, 0, 5),
+                    CellSize = UDim2New(0, Data.CellSize or 72, 0, Data.CellSize or 72),
+                    CellPadding = UDim2New(0, 8, 0, 8),
                     SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Scroll"].Instance,
+                    Name = "\0",
+                    PaddingTop = UDimNew(0, 4),
+                    PaddingLeft = UDimNew(0, 4)
                 })
             end
 
@@ -5655,7 +5662,7 @@ local Library do
             Logo = Data.Logo or Data.logo or "",
             LogoImage = Data.LogoImage or Data.logoimage or nil,
             FadeTime = Data.FadeTime or Data.fadetime or 0.4,
-            Size = Data.Size or Data.size or UDim2New(0, 751, 0, 539),
+            Size = Data.Size or Data.size or UDim2New(0, 920, 0, 660),
 
             Pages = { },
             Items = { },
