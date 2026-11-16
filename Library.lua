@@ -1581,6 +1581,15 @@ local Library do
                 Debounce = true
                 Items["Page"].Instance.Visible = Bool 
 
+                -- kicia-style lazy content: grids build on first open only
+                if SubPage.Active and SubPage.EverOpened == nil then
+                    SubPage.EverOpened = true
+
+                    if SubPage.OnFirstOpen then
+                        Library:SafeCall(SubPage.OnFirstOpen)
+                    end
+                end
+
                 if SubPage.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0})
                     Items["ButtonBorder"]:Tween(nil, {Transparency = 0})
@@ -6199,6 +6208,10 @@ local Library do
             Columns = SubPage.Columns,
             Window = SubPage.Page.Window
         })
+
+        function NewSubPage:OnFirstOpen(Callback)
+            NewSubPage.OnFirstOpen = Callback
+        end
 
         return setmetatable(NewSubPage, Library.Pages)
     end
