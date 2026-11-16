@@ -889,6 +889,13 @@ local Library do
             coroutine.close(Value)
         end
 
+        -- the shared cursor enforcement loop is a raw connection (survives
+        -- Connections cleanup) and would keep eating the cursor after unload
+        self.MouseWindows = { }
+        self:UpdateMenuMouse()
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+
         if self.Holder then 
             self.Holder:Clean()
         end
@@ -5664,6 +5671,55 @@ local Library do
         end)
     end
 
+    -- shared cursor manager: any open window unlocks the mouse for UI, and
+    -- the game's original state is restored once the last window closes;
+    -- two windows must not fight over the cursor
+    Library.MouseWindows = { }
+    Library.SavedMouseBehavior = nil
+    Library.SavedMouseIcon = nil
+    Library.MouseStepped = nil
+
+    Library.UpdateMenuMouse = function(self)
+        local AnyOpen = next(self.MouseWindows) ~= nil
+
+        if AnyOpen then
+            if not self.MouseStepped then
+                -- capture the game's mouse state on first open, restore it on
+                -- last close; hardcoding values on close fights the game's own
+                -- cursor loop (kicia does the same)
+                self.SavedMouseBehavior = UserInputService.MouseBehavior
+                self.SavedMouseIcon = UserInputService.MouseIconEnabled
+
+                self.MouseStepped = RunService.RenderStepped:Connect(function()
+                    if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                    end
+
+                    if UserInputService.MouseIconEnabled then
+                        UserInputService.MouseIconEnabled = false
+                    end
+                end)
+            end
+
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            UserInputService.MouseIconEnabled = false
+        else
+            UserInputService.MouseBehavior = self.SavedMouseBehavior or UserInputService.MouseBehavior
+
+            if self.SavedMouseIcon ~= nil then
+                UserInputService.MouseIconEnabled = self.SavedMouseIcon
+            end
+
+            self.SavedMouseBehavior = nil
+            self.SavedMouseIcon = nil
+
+            if self.MouseStepped then
+                self.MouseStepped:Disconnect()
+                self.MouseStepped = nil
+            end
+        end
+    end
+
     Library.Window = function(self, Data)
         Data = Data or { }
 
@@ -5685,7 +5741,8 @@ local Library do
             Draggable = true,
             Resizeable = true,
             AnchorPoint = Vector2New(0, 0),
-            Position = UDim2New(0, Camera.ViewportSize.X / 3.3, 0, Camera.ViewportSize.Y / 3.3),
+            Position = Data.Position or Data.position
+                or UDim2New(0, Camera.ViewportSize.X / 3.3, 0, Camera.ViewportSize.Y / 3.3),
             Size = Window.Size
         }) do
             Items["Side"] = Instances:Create("Frame", {
@@ -5997,53 +6054,18 @@ local Library do
             return false
         end
 
-        local MouseStepped = nil
-        local SavedMouseBehavior = nil
-        local SavedMouseIcon = nil
-
-        -- capture the game's mouse state when opening and put it back on
-        -- close; hardcoding true on close fights the game's own cursor loop
-        -- (kicia does the same)
+        -- per-window visibility only; the cursor itself is shared
+        -- Library-level state (UpdateMenuMouse)
         local function ApplyMouseState()
+            Items["MouseBackground"].Instance.Visible = Window.IsOpen
+
             if Window.IsOpen then
-                Items["MouseBackground"].Instance.Visible = true
-
-                if not MouseStepped then
-                    SavedMouseBehavior = UserInputService.MouseBehavior
-                    SavedMouseIcon = UserInputService.MouseIconEnabled
-                end
-
-                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-
-                if not MouseStepped then
-                    MouseStepped = RunService.RenderStepped:Connect(function()
-                        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
-                            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-                        end
-
-                        if UserInputService.MouseIconEnabled then
-                            UserInputService.MouseIconEnabled = false
-                        end
-                    end)
-                end
-
-                UserInputService.MouseIconEnabled = false
+                Library.MouseWindows[Window] = true
             else
-                Items["MouseBackground"].Instance.Visible = false
-                UserInputService.MouseBehavior = SavedMouseBehavior or UserInputService.MouseBehavior
-
-                if SavedMouseIcon ~= nil then
-                    UserInputService.MouseIconEnabled = SavedMouseIcon
-                end
-
-                SavedMouseBehavior = nil
-                SavedMouseIcon = nil
-
-                if MouseStepped then
-                    MouseStepped:Disconnect()
-                    MouseStepped = nil
-                end
+                Library.MouseWindows[Window] = nil
             end
+
+            Library:UpdateMenuMouse()
         end
 
         function Window:SetOpen(Bool)
@@ -6113,11 +6135,24 @@ local Library do
             end)
         end
 
-        Library:Connect(UserInputService.InputBegan, function(Input)
-            if tostring(Input.KeyCode) == Library.MenuKeybind or tostring(Input.UserInputType) == Library.MenuKeybind then
-                Window:SetOpen(not Window.IsOpen)
-            end
-        end)
+        -- per-window toggle key; false = no keybind (opened programmatically)
+        local MenuKeybind = Data.MenuKeybind
+
+        if MenuKeybind == nil then
+            MenuKeybind = Data.menukeybind
+        end
+
+        if MenuKeybind == nil then
+            MenuKeybind = Library.MenuKeybind
+        end
+
+        if MenuKeybind ~= false then
+            Library:Connect(UserInputService.InputBegan, function(Input)
+                if tostring(Input.KeyCode) == MenuKeybind or tostring(Input.UserInputType) == MenuKeybind then
+                    Window:SetOpen(not Window.IsOpen)
+                end
+            end)
+        end
 
         local SearchStepped
 
@@ -6158,7 +6193,18 @@ local Library do
             end
         end)
 
-        Window:SetOpen(true)
+        if Data.AutoOpen == nil then
+            if Data.autoopen == nil then
+                Data.AutoOpen = true
+            else
+                Data.AutoOpen = Data.autoopen
+            end
+        end
+
+        if Data.AutoOpen then
+            Window:SetOpen(true)
+        end
+
         return setmetatable(Window, self)
     end
 
