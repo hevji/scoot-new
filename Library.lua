@@ -836,7 +836,7 @@ local Library do
         Parent = gethui(),
         Name = "\0",
         ZIndexBehavior = Enum.ZIndexBehavior.Global,
-        DisplayOrder = 2,
+        DisplayOrder = 1000000,
         ResetOnSpawn = false
     })
 
@@ -1901,6 +1901,13 @@ local Library do
                     })  SubItems["Text"]:AddToTheme({TextColor3 = "Text"})
 
                     SubItems["Text"]:TextBorder()
+
+                    Instances:Create("UIPadding", {
+                        Parent = SubItems["Text"].Instance,
+                        Name = "\0",
+                        PaddingLeft = UDimNew(0, 8),
+                        PaddingRight = UDimNew(0, 8)
+                    })
                 end
 
                 function NewButton:Press()
@@ -2682,6 +2689,15 @@ local Library do
                 Items["Grid"].Instance.Visible = Bool
             end
 
+            function IconGrid:Filter(Text)
+                Text = StringLower(tostring(Text or ""))
+
+                for TileName, Record in IconGrid.Tiles do
+                    Record.Button.Instance.Visible = Text == ""
+                        or StringLower(TileName):find(Text, 1, true) ~= nil
+                end
+            end
+
             if Data.Items then
                 IconGrid:SetItems(Data.Items)
             end
@@ -3028,7 +3044,7 @@ local Library do
 
             function Dropdown:Add(Option)
                 local OptionButton = Instances:Create("TextButton", {
-                    Parent = Items["OptionHolder"].Instance,
+                    Parent = Items["Scroll"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(235, 235, 235),
@@ -5877,6 +5893,41 @@ local Library do
             WindowFadeInstances = nil
         end)
 
+        local MouseStepped = nil
+        local SavedMouseBehavior = nil
+
+        -- the game re-locks/re-shows the OS cursor every frame, so the menu
+        -- state has to be enforced while it is open
+        local function ApplyMouseState()
+            if Window.IsOpen then
+                Items["MouseBackground"].Instance.Visible = true
+                UserInputService.MouseIconEnabled = false
+                SavedMouseBehavior = UserInputService.MouseBehavior
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+
+                if not MouseStepped then
+                    MouseStepped = RunService.RenderStepped:Connect(function()
+                        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+                            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+                        end
+
+                        if UserInputService.MouseIconEnabled then
+                            UserInputService.MouseIconEnabled = false
+                        end
+                    end)
+                end
+            else
+                Items["MouseBackground"].Instance.Visible = false
+                UserInputService.MouseIconEnabled = true
+                UserInputService.MouseBehavior = SavedMouseBehavior or Enum.MouseBehavior.Default
+
+                if MouseStepped then
+                    MouseStepped:Disconnect()
+                    MouseStepped = nil
+                end
+            end
+        end
+
         function Window:SetOpen(Bool)
             if Debounce then 
                 return
@@ -5900,13 +5951,7 @@ local Library do
             local function OnFadeCompleted()
                 Debounce = false 
                 Items["Window"].Instance.Visible = Window.IsOpen
-                if Window.IsOpen then
-                    Items["MouseBackground"].Instance.Visible = true
-                    UserInputService.MouseIconEnabled = false
-                else
-                    Items["MouseBackground"].Instance.Visible = false
-                    UserInputService.MouseIconEnabled = true
-                end
+                ApplyMouseState()
             end
 
             if NewTween then
