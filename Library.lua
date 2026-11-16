@@ -2599,8 +2599,8 @@ local Library do
                             Image = Item.Image,
                             BackgroundTransparency = 1,
                             BorderSizePixel = 0,
-                            Position = UDim2New(0, 4, 0, 4),
-                            Size = UDim2New(1, -8, 1, -20)
+                            Position = UDim2New(0, 5, 0, 5),
+                            Size = UDim2New(1, -10, 1, -29)
                         })
                     end
 
@@ -2613,8 +2613,8 @@ local Library do
                             Name = "\0",
                             BackgroundTransparency = 1,
                             BorderSizePixel = 0,
-                            Position = UDim2New(0, 4, 0, 4),
-                            Size = UDim2New(1, -8, 1, -20)
+                            Position = UDim2New(0, 5, 0, 5),
+                            Size = UDim2New(1, -10, 1, -29)
                         })
 
                         Library:SafeCall(Item.Render, {
@@ -2635,8 +2635,8 @@ local Library do
                         BorderColor3 = FromRGB(0, 0, 0),
                         Text = Item.Name,
                         TextSize = 9,
-                        Size = UDim2New(1, -4, 0, 12),
-                        Position = UDim2New(0, 2, 1, -13),
+                        Size = UDim2New(1, -8, 0, 14),
+                        Position = UDim2New(0, 4, 1, -19),
                         BackgroundTransparency = 1,
                         TextXAlignment = Enum.TextXAlignment.Center,
                         TextTruncate = Enum.TextTruncate.AtEnd,
