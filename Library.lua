@@ -814,16 +814,6 @@ local Library do
             local TtfPath = Library.Folders.Assets .. "/" .. Name .. ".ttf"
             local JsonPath = Library.Folders.Assets .. "/" .. Name .. ".json"
 
-            if isfile(JsonPath) then
-                local Ok, Font = pcall(function()
-                    return Font.new(getcustomasset(JsonPath))
-                end)
-
-                if Ok then
-                    return Font
-                end
-            end
-
             -- a cached file that isn't actually a font (bad download, HTML
             -- error page) must be replaced, not trusted
             if not isfile(TtfPath) or not fontBytesOk(readfile(TtfPath)) then
@@ -842,14 +832,22 @@ local Library do
 
                     writefile(TtfPath, Source)
                 end)
+
+                if not isfile(TtfPath) or not fontBytesOk(readfile(TtfPath)) then
+                    return nil
+                end
             end
 
             local AssetOk, AssetId = pcall(getcustomasset, TtfPath)
 
-            if not AssetOk then
+            if not AssetOk or type(AssetId) ~= "string" then
                 return nil
             end
 
+            -- the descriptor is rebuilt on every load. A cached one embeds the
+            -- previous session's custom-asset id: Font.new still succeeds but
+            -- every face silently fails to load and text renders in the wrong
+            -- font (the classic scoot "weird font")
             pcall(function()
                 local FontData = {
                     name = Name,
@@ -895,9 +893,17 @@ local Library do
             Url = "https://raw.githubusercontent.com/sametexe001/luas/main/fonts/Monaco.ttf"
         })
 
-        -- built-in Monaco keeps the look when the download/getcustomasset
-        -- path fails outright
-        Library.Font = Monaco or Font.new("rbxasset://fonts/families/Monaco.json")
+        -- "rbxasset://fonts/families/Monaco.json" is not a real Roblox family:
+        -- Font.new either throws (uncaught -> dead library) or returns a face
+        -- that never loads (the weird font). Fall back to a guaranteed
+        -- built-in instead; Enum-based Font.new cannot fail.
+        if Monaco ~= nil then
+            Library.Font = Monaco
+        else
+            local Ok, Fallback = pcall(Font.new, Enum.Font.RobotoMono)
+
+            Library.Font = Ok and Fallback or Font.new(Enum.Font.SourceSans)
+        end
     end
 
     Library.Holder = Instances:Create("ScreenGui", {
