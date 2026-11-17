@@ -970,7 +970,17 @@ local Library do
         UserInputService.MouseIconEnabled = true
     end
 
+    -- per-instance getcustomasset calls were the boot bottleneck: ~150
+    -- colorpickers each resolved the same handful of image files
+    local ImageCache = { }
+
     Library.GetImage = function(self, Image)
+        local Cached = ImageCache[Image]
+
+        if Cached ~= nil then
+            return Cached
+        end
+
         local ImageData = self.Images[Image]
 
         if not ImageData then
@@ -984,6 +994,11 @@ local Library do
         end
 
         local Ok, Asset = pcall(getcustomasset, Path)
+
+        -- nil stays uncached so a late writefile can still succeed
+        if Ok and Asset then
+            ImageCache[Image] = Asset
+        end
 
         return Ok and Asset or nil
     end
