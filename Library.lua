@@ -199,7 +199,10 @@ local Library do
         ["RightControl"]      = "RightControl",
         ["LeftControl"]       = "LeftControl",
         ["LeftAlt"]           = "LeftAlt",
-        ["RightAlt"]          = "RightAlt"
+        ["RightAlt"]          = "RightAlt",
+        ["MouseButton1"]      = "MB1",
+        ["MouseButton2"]      = "MB2",
+        ["MouseButton3"]      = "MB3"
     }
 
     local SpecialCharacters = {
@@ -4573,7 +4576,7 @@ local Library do
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(235, 235, 235),
                     TextTransparency = 0.4000000059604645,
-                    Text = "MB2",
+                    Text = "None",
                     AutoButtonColor = false,
                     Size = UDim2New(0, 0, 1, 0),
                     BackgroundTransparency = 1,
@@ -4690,95 +4693,162 @@ local Library do
                 end
             end
 
+            local ValidModes = { Toggle = true, Hold = true, Always = true }
+
+            local function PushKeybindState()
+                Library.Flags[Keybind.Flag] = {
+                    Mode = Keybind.Mode,
+                    Key = Keybind.Key,
+                    Toggled = Keybind.Toggled
+                }
+
+                if Data.Callback then
+                    Library:SafeCall(Data.Callback, Keybind.Toggled)
+                end
+
+                Update()
+            end
+
+            local function ApplyModeVisual(Mode)
+                for Index, Value in Modes do
+                    if Index == Mode then
+                        Value:Tween(nil, { BackgroundTransparency = 0 })
+                    else
+                        Value:Tween(nil, { BackgroundTransparency = 1 })
+                    end
+                end
+            end
+
+            local function DisplayKey(Key)
+                if typeof(Key) ~= "EnumItem" then
+                    return "None"
+                end
+
+                return Keys[Key.Name] or Key.Name
+            end
+
+            -- accepts an EnumItem, "Enum.KeyCode.F", "KeyCode.F", "F", or
+            -- nil/"None" to unbind; Escape and Backspace always unbind
+            -- (Escape is always game-processed, so it can never fire in-game)
+            local function ResolveKey(Value)
+                if typeof(Value) == "EnumItem" then
+                    if Value.EnumType == Enum.KeyCode then
+                        if
+                            Value == Enum.KeyCode.Escape
+                            or Value == Enum.KeyCode.Backspace
+                            or Value == Enum.KeyCode.Unknown
+                        then
+                            return nil
+                        end
+
+                        return Value
+                    end
+
+                    if
+                        Value.EnumType == Enum.UserInputType
+                        and (
+                            Value == Enum.UserInputType.MouseButton1
+                            or Value == Enum.UserInputType.MouseButton2
+                            or Value == Enum.UserInputType.MouseButton3
+                        )
+                    then
+                        return Value
+                    end
+
+                    return nil
+                end
+
+                if type(Value) ~= "string" then
+                    return nil
+                end
+
+                if Value == "" or Value == "None" then
+                    return nil
+                end
+
+                local EnumType, Name = Value:match("^Enum%.([%a]+)%.([%w]+)$")
+                if EnumType == nil then
+                    EnumType, Name = Value:match("^([%a]+)%.([%w]+)$")
+                end
+                if EnumType == nil then
+                    EnumType, Name = "KeyCode", Value
+                end
+
+                local Ok, Resolved = pcall(function()
+                    return Enum[EnumType][Name]
+                end)
+                if Ok and Resolved ~= nil then
+                    return ResolveKey(Resolved)
+                end
+
+                return nil
+            end
+
             function Keybind:Get()
                 return Keybind.Key, Keybind.Mode, Keybind.Toggled
             end
 
             function Keybind:Set(Key)
-                if StringFind(tostring(Key), "Enum") then 
-                    -- Escape (kicia's unbind key) and Backspace must never
-                    -- become a real bind: they can't be triggered in-game
-                    -- (Escape is always game-processed) and Backspace already
-                    -- displays as "None"
-                    if Key.Name == "Escape" or Key.Name == "Backspace" then
-                        Keybind.Key = ""
-                        Keybind.Value = "None"
-                        Items["KeyButton"].Instance.Text = "None"
+                local Mode = nil
+                local IsKey = false
+                local Value = nil
 
-                        Library.Flags[Keybind.Flag] = {
-                            Mode = Keybind.Mode,
-                            Key = Keybind.Key,
-                            Toggled = Keybind.Toggled
-                        }
-
-                        if Data.Callback then 
-                            Library:SafeCall(Data.Callback, Keybind.Toggled)
-                        end
-
-                        Update()
-
-                        Keybind.Picking = false
-                        return
-                    end
-
-                    Keybind.Key = tostring(Key)
-
-                    Key = Key.Name == "Backspace" and "None" or Key.Name
-
-                    local KeyString = Keys[Keybind.Key] or StringGSub(Key, "Enum.", "") or "None"
-                    local TextToDisplay = StringGSub(StringGSub(KeyString, "KeyCode.", ""), "UserInputType.", "") or "None"
-
-                    Keybind.Value = TextToDisplay
-                    Items["KeyButton"].Instance.Text = TextToDisplay
-
-                    Library.Flags[Keybind.Flag] = {
-                        Mode = Keybind.Mode,
-                        Key = Keybind.Key,
-                        Toggled = Keybind.Toggled
-                    }
-
-                    if Data.Callback then 
-                        Library:SafeCall(Data.Callback, Keybind.Toggled)
-                    end
-
-                    Update()
+                if typeof(Key) == "EnumItem" then
+                    IsKey = true
+                    Value = Key
                 elseif type(Key) == "table" then
-                    local RealKey = Key.Key == "Backspace" and "None" or Key.Key
-                    Keybind.Key = tostring(Key.Key)
+                    IsKey = Key.Key ~= nil
+                    Value = Key.Key
 
-                    if Key.Mode then
-                        Keybind.Mode = Key.Mode
-                        Keybind:SetMode(Key.Mode)
+                    -- a table without a valid mode keeps kicia's Toggle default
+                    if type(Key.Mode) == "string" and ValidModes[Key.Mode] then
+                        Mode = Key.Mode
                     else
-                        Keybind.Mode = "Toggle"
-                        Keybind:SetMode("Toggle")
+                        Mode = "Toggle"
+                    end
+                elseif type(Key) == "string" then
+                    if ValidModes[Key] then
+                        Mode = Key
+                    else
+                        IsKey = true
+                        Value = Key
+                    end
+                end
+
+                local Changed = false
+
+                if IsKey then
+                    local Resolved = ResolveKey(Value)
+                    local NewKey = Resolved ~= nil and tostring(Resolved) or ""
+                    local NewValue = DisplayKey(Resolved)
+
+                    if Keybind.Key ~= NewKey then
+                        Keybind.Key = NewKey
+                        Changed = true
                     end
 
-                    local KeyString = Keys[Keybind.Key] or StringGSub(tostring(RealKey), "Enum.", "") or RealKey
-                    local TextToDisplay = KeyString and StringGSub(StringGSub(KeyString, "KeyCode.", ""), "UserInputType.", "") or "None"
-
-                    TextToDisplay = StringGSub(StringGSub(KeyString, "KeyCode.", ""), "UserInputType.", "")
-
-                    Keybind.Value = TextToDisplay
-                    Items["KeyButton"].Instance.Text = TextToDisplay
-
-                    if Data.Callback then 
-                        Library:SafeCall(Data.Callback, Keybind.Toggled)
+                    if Keybind.Value ~= NewValue then
+                        Keybind.Value = NewValue
+                        Changed = true
                     end
 
-                    Update()
-                elseif TableFind({"Toggle", "Hold", "Always"}, Key) then
-                    Keybind.Mode = Key
-                    Keybind:SetMode(Keybind.Mode)
+                    Items["KeyButton"].Instance.Text = NewValue
+                end
 
-                    if Data.Callback then 
-                        Library:SafeCall(Data.Callback, Keybind.Toggled)
+                if Mode ~= nil then
+                    if Keybind.Mode ~= Mode then
+                        Keybind.Mode = Mode
+                        Changed = true
                     end
 
-                    Update()
+                    ApplyModeVisual(Mode)
                 end
 
                 Keybind.Picking = false
+
+                if Changed then
+                    PushKeybindState()
+                end
             end
 
             local Debounce = false
@@ -4843,50 +4913,45 @@ local Library do
             end
 
             function Keybind:SetMode(Mode)
-                for Index, Value in Modes do 
-                    if Index == Mode then
-                        Value:Tween(nil, {BackgroundTransparency = 0})
-                    else
-                        Value:Tween(nil, {BackgroundTransparency = 1})
-                    end
+                if not ValidModes[Mode] then
+                    return
                 end
 
-                Library.Flags[Keybind.Flag] = {
-                    Mode = Keybind.Mode,
-                    Key = Keybind.Key,
-                    Toggled = Keybind.Toggled
-                }
+                local Changed = Keybind.Mode ~= Mode
+                Keybind.Mode = Mode
+                ApplyModeVisual(Mode)
 
-                if Data.Callback then 
-                    Library:SafeCall(Data.Callback, Keybind.Toggled)
+                if Changed then
+                    PushKeybindState()
                 end
-
-                Update()
             end
 
             function Keybind:Press(Bool)
-                if Keybind.Mode == "Toggle" then 
-                    Keybind.Toggled = not Keybind.Toggled
-                elseif Keybind.Mode == "Hold" then 
-                    Keybind.Toggled = Bool
-                elseif Keybind.Mode == "Always" then 
-                    Keybind.Toggled = true
+                local Toggled = Keybind.Toggled
+
+                if Keybind.Mode == "Toggle" then
+                    Toggled = not Toggled
+                elseif Keybind.Mode == "Hold" then
+                    Toggled = Bool == true
+                elseif Keybind.Mode == "Always" then
+                    Toggled = true
                 end
 
-                Library.Flags[Keybind.Flag] = {
-                    Mode = Keybind.Mode,
-                    Key = Keybind.Key,
-                    Toggled = Keybind.Toggled
-                }
-
-                if Data.Callback then 
-                    Library:SafeCall(Data.Callback, Keybind.Toggled)
+                if Toggled ~= Keybind.Toggled then
+                    Keybind.Toggled = Toggled
+                    PushKeybindState()
                 end
-
-                Update()
             end
 
+            local PickConnection
+
             Items["KeyButton"]:Connect("MouseButton1Click", function()
+                -- a second click while picking must not stack listeners
+                if PickConnection ~= nil then
+                    PickConnection:Disconnect()
+                    PickConnection = nil
+                end
+
                 Keybind.Picking = true 
 
                 Items["KeyButton"].Instance.Text = "."
@@ -4908,8 +4973,8 @@ local Library do
                     end
                 end)
 
-                local InputBegan
-                InputBegan = UserInputService.InputBegan:Connect(function(Input, Processed)
+                local Connection
+                Connection = UserInputService.InputBegan:Connect(function(Input, Processed)
                     -- kicia ignored game-processed keyboard input (chat etc.);
                     -- Escape stays a valid unbind either way
                     if
@@ -4920,15 +4985,29 @@ local Library do
                         return
                     end
 
-                    if Input.UserInputType == Enum.UserInputType.Keyboard then 
-                        Keybind:Set(Input.KeyCode)
-                    else
-                        Keybind:Set(Input.UserInputType)
+                    local Candidate = Input.UserInputType == Enum.UserInputType.Keyboard
+                        and Input.KeyCode
+                        or Input.UserInputType
+
+                    -- unsupported input (touch, gamepad, mouse move): keep
+                    -- picking instead of silently clearing the bind
+                    if
+                        ResolveKey(Candidate) == nil
+                        and Candidate ~= Enum.KeyCode.Escape
+                        and Candidate ~= Enum.KeyCode.Backspace
+                    then
+                        return
                     end
 
-                    InputBegan:Disconnect()
-                    InputBegan = nil
+                    Keybind:Set(Candidate)
+                    Connection:Disconnect()
+
+                    if PickConnection == Connection then
+                        PickConnection = nil
+                    end
                 end)
+
+                PickConnection = Connection
             end)
 
             Items["KeyButton"]:Connect("MouseButton2Down", function()
@@ -4949,78 +5028,72 @@ local Library do
                 end
             end)
 
-            -- the adapter (or any embedder) can drive state itself and skip
-            -- scoot's own key handling entirely
+            -- an embedder can drive state itself and skip scoot's own key
+            -- handling by passing Input = false
             if Data.Input ~= false then
-            Library:Connect(UserInputService.InputBegan, function(Input)
-                if Keybind.Value == "None" then
-                    return
+                local function ShouldHandle(Input, Processed)
+                    if Keybind.Key == "" or Keybind.Picking then
+                        return false
+                    end
+
+                    -- don't fire while the user is typing in chat or a textbox
+                    if Processed and Input.UserInputType == Enum.UserInputType.Keyboard then
+                        return false
+                    end
+
+                    return tostring(Input.KeyCode) == Keybind.Key
+                        or tostring(Input.UserInputType) == Keybind.Key
                 end
 
-                if tostring(Input.KeyCode) == Keybind.Key then
+                Library:Connect(UserInputService.InputBegan, function(Input, Processed)
+                    if not ShouldHandle(Input, Processed) then
+                        return
+                    end
+
                     if Keybind.Mode == "Toggle" then
                         Keybind:Press()
-                    elseif Keybind.Mode == "Hold" then
+                    elseif Keybind.Mode == "Hold" or Keybind.Mode == "Always" then
                         Keybind:Press(true)
+                    end
+                end)
+
+                Library:Connect(UserInputService.InputEnded, function(Input)
+                    if not ShouldHandle(Input, false) then
+                        return
+                    end
+
+                    if Keybind.Mode == "Hold" then
+                        Keybind:Press(false)
                     elseif Keybind.Mode == "Always" then
                         Keybind:Press(true)
                     end
-                elseif tostring(Input.UserInputType) == Keybind.Key then
-                    if Keybind.Mode == "Toggle" then
-                        Keybind:Press()
-                    elseif Keybind.Mode == "Hold" then
-                        Keybind:Press(true)
-                    elseif Keybind.Mode == "Always" then
-                        Keybind:Press(true)
-                    end
-                end
-            end)
-
-            Library:Connect(UserInputService.InputEnded, function(Input)
-                if Keybind.Value == "None" then
-                    return
-                end
-
-                if tostring(Input.KeyCode) == Keybind.Key then
-                    if Keybind.Mode == "Hold" then 
-                        Keybind:Press(false)
-                    elseif Keybind.Mode == "Always" then 
-                        Keybind:Press(true)
-                    end
-                elseif tostring(Input.UserInputType) == Keybind.Key then
-                    if Keybind.Mode == "Hold" then 
-                        Keybind:Press(false)
-                    elseif Keybind.Mode == "Always" then 
-                        Keybind:Press(true)
-                    end
-                end
-            end)
+                end)
             end
 
             Items["Toggle"]:Connect("MouseButton1Down", function()
-                Keybind.Mode = "Toggle"
                 Keybind:SetMode("Toggle")
             end)
 
             Items["Hold"]:Connect("MouseButton1Down", function()
-                Keybind.Mode = "Hold"
                 Keybind:SetMode("Hold")
             end)
 
             Items["Always"]:Connect("MouseButton1Down", function()
-                Keybind.Mode = "Always"
                 Keybind:SetMode("Always")
             end)
 
-            if Data.Default then
-                Keybind:Set({Key = Data.Default, Mode = Data.Mode or "Toggle"})
+            if Data.Default ~= nil then
+                if type(Data.Default) == "table" then
+                    Keybind:Set(Data.Default)
+                else
+                    Keybind:Set({ Key = Data.Default, Mode = Data.Mode or "Toggle" })
+                end
             else
                 -- unbound by default: still honor the chosen mode so the first
                 -- key the user picks works right away
                 Items["KeyButton"].Instance.Text = "None"
 
-                if Data.Mode then
-                    Keybind.Mode = Data.Mode
+                if type(Data.Mode) == "string" then
                     Keybind:SetMode(Data.Mode)
                 end
             end
